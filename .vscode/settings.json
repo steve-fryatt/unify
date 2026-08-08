@@ -1,0 +1,14 @@
+{
+	"spellright.language": [
+		"en_GB"
+	],
+	"spellright.documentTypes": [
+		"markdown",
+		"latex",
+		"plaintext",
+		"xml"
+	],
+	"files.associations": {
+		"colourtrans.h": "c"
+	}
+}
