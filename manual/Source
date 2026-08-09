@@ -1,0 +1,64 @@
+<document title="Unify">
+<define name="version" value="">
+<define name="date" value="" length=30 align="right">
+
+
+
+
+<literal mode="Text">
+=============================================================================
+Unify - Run Unity Unit Tests on RISC OS                          Version $$version$$
+
+(C) Stephen Fryatt, 2026                       $$date$$
+=============================================================================
+</literal>
+
+
+
+
+<chapter title="License" file="License">
+
+<cite>Unify</cite> is licensed under the EUPL, Version&nbsp;1.2 only (the &ldquo;Licence&rdquo;); you may not use this work except in compliance with the Licence.
+
+You may obtain a copy of the Licence at <link ref="#url http://joinup.ec.europa.eu/software/page/eupl">http://joinup.ec.europa.eu/software/page/eupl</link>
+
+Unless required by applicable law or agreed to in writing, software distributed under the Licence is distributed on an &ldquo;<strong>as is</strong>&rdquo; basis, <strong>without warranties or conditions of any kind</strong>, either express or implied.
+
+See the Licence for the specific language governing permissions and limitations under the Licence.
+
+The source for <cite>Unify</cite> can be found on GitHub, at <link ref="#url https://github.com/steve-fryatt/dataxfer">https://github.com/steve-fryatt/dataxfer</link>
+
+</chapter>
+
+
+
+
+<chapter title="Version History" file="History">
+
+This is a complete list of all the changes made to the publicly released versions of <cite>Launcher</cite>.
+
+
+<subhead title="Test Build">
+
+Initial Test Build.
+
+</chapter>
+
+
+
+
+<literal mode="Text">
+
+Updates and Contacting Me
+-------------------------
+
+  If you have any comments about Unify, or would like to report any bugs
+  that you find, you can email me at the address below.
+
+  Updates to Unify and more programs for RISC OS computers can be found
+  on my website at
+  https://www.stevefryatt.org.uk/risc-os/programming-tools
+
+  Stephen Fryatt
+  email: info@stevefryatt.org.uk
+</literal>

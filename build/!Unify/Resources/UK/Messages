@@ -1,0 +1,58 @@
+# Copyright 2026, Stephen Fryatt (info@stevefryatt.org.uk)
+#
+# This file is part of Unify:
+#
+#   http://www.stevefryatt.org.uk/risc-os
+#
+# Licensed under the EUPL, Version 1.2 only (the "Licence");
+# You may not use this work except in compliance with the
+# Licence.
+#
+# You may obtain a copy of the Licence at:
+#
+#   http://joinup.ec.europa.eu/software/page/eupl
+#
+# Unless required by applicable law or agreed to in
+# writing, software distributed under the Licence is
+# distributed on an "AS IS" basis, WITHOUT WARRANTIES
+# OR CONDITIONS OF ANY KIND, either express or implied.
+#
+# See the Licence for the specific language governing
+# permissions and limitations under the Licence.
+
+# UK Version
+
+TaskName:Unify
+Version:%0 (%1)
+
+TaskSpr:application
+SupportURL:https://www.stevefryatt.org.uk/risc-os/programming-tools
+
+BadResource:Failed to locate suitable %0 file.
+BadTemplate:Window template '%0' not found.
+
+#LogMenu:Logs
+
+#LogMessageSize:Message Size
+#LogSenderHandle:Sending Task Handle
+#LogMyRef:My Ref
+#LogYourRef:Your Ref
+#LogAction:Message Action
+#LogWindow:Window Handle
+#LogIcon:Icon Handle
+#LogXPos:X Coordinate
+#LogYPos:Y Coordinate
+#LogEstSize:Estimated Size
+#LogType:File Type
+#LogName:File Name
+
+Help.IconBar:\TUnify application, which can run and analyse unit test suites from Unity.
+
+Help.ProgInfo:This \w displays information about Unify.
+Help.ProgInfo.Website:\Sopen the Unify home page in your web browser, if one has been seen.
+
+Help.IconBarMenu.00:\Rsee information about Unify.
+Help.IconBarMenu.01:\Sread Unify's online help.
+Help.IconBarMenu.02:\Squit Unify.
+
+#Help.LogListMenu.??:\Sopen this log for analysis.
