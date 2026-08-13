@@ -29,6 +29,8 @@
 
 /* ANSI C header files */
 
+#include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 
 /* Acorn C header files */
@@ -82,6 +84,11 @@ struct test_file_block {
 
 static struct test_file_block *test_file_create_instance(struct test_file_block **list, char *name);
 static void test_file_delete_instance(struct test_file_block **list, struct test_file_block *instance);
+
+static osbool test_file_scan_source(char *filename);
+static osbool test_file_scan_block(FILE *fh, int level);
+static osbool test_file_found_definition(FILE *fh);
+static osbool test_file_found_call(FILE *fh);
 
 /**
  * Create a new Test File instance and link it in to the supplied
@@ -176,6 +183,7 @@ void test_file_include_entry(struct test_file_block **list, enum test_file_statu
 	case TEST_FILE_STATUS_SOURCE:
 		string_copy(entry->source_file, filename, TEST_FILE_NAME_LEN);
 		entry->status |= TEST_FILE_STATUS_SOURCE;
+		test_file_scan_source(filename);
 		break;
 
 	case TEST_FILE_STATUS_ABSOLUTE:
@@ -186,4 +194,117 @@ void test_file_include_entry(struct test_file_block **list, enum test_file_statu
 	default:
 		break;
 	}
+}
+
+
+static osbool test_file_scan_source(char *filename)
+{
+	FILE *fh = fopen(filename, "r");
+	if (fh == NULL)
+		return FALSE;
+
+	osbool result = test_file_scan_block(fh, 0);
+
+	fclose(fh);
+
+	return result;
+}
+
+static osbool test_file_scan_block(FILE *fh, int level)
+{
+	if (fh == NULL)
+		return FALSE;
+
+	int c;
+
+	/* Step past any leading white space. */
+
+	while ((c = fgetc(fh)) != EOF && isspace(c));
+	if (c == EOF)
+		return TRUE;
+
+	fseek(fh, -1, SEEK_CUR);
+
+	/* Scan for text that we're interested in. */
+
+	char *definition = "void ";
+	char *call = "RUN_TEST(";
+
+	char *test_definition = definition, *test_call = call;
+
+	while ((c = fgetc(fh)) != EOF && c != '}') {
+		if (level == 1 && test_definition == definition && *test_call == c) {
+			/* We're matching a call line. */
+			test_call++;
+			if (*test_call == '\0')
+				test_file_found_call(fh);
+		} else if (level == 0 && test_call == call && *test_definition == c) {
+			/* We're matching a function definition line. */
+			test_definition++;
+			if (*test_definition == '\0')
+				test_file_found_definition(fh);
+		} else if (c == '{') {
+			/* We've moved into a new block. */
+			test_file_scan_block(fh, level + 1);
+			test_definition = definition;
+			test_call = call;
+		} else if (c == ';') {
+			/* The end of the current statement. */
+			test_definition = definition;
+			test_call = call;
+
+			/* Skip past leading whitespace. */
+			while ((c = fgetc(fh)) != EOF && isspace(c));
+			if (c == EOF)
+				break;
+
+			fseek(fh, -1, SEEK_CUR);
+		} else {
+			/* All matches failed, so reset the searches. */
+			test_definition = definition;
+			test_call = call;
+		}
+	}
+
+	return TRUE;
+}
+
+static osbool test_file_found_definition(FILE *fh)
+{
+	char buffer[256], *b = buffer;
+
+	int c = '\0';
+
+	while ((c = fgetc(fh)) && c != '(' && c != ';')
+		if (b < buffer + 255)
+			*b++ = c;
+
+	*b = '\0';
+
+	if (c == ';')
+		fseek(fh, -1, SEEK_CUR);
+	else if (c == '(' && strcmp(buffer, "main") && strcmp(buffer, "setUp") && strcmp(buffer, "tearDown"))
+		debug_printf("Found definition '%s'", buffer);
+
+	return (c == '(') ? TRUE : FALSE;
+}
+
+static osbool test_file_found_call(FILE *fh)
+{
+	char buffer[256], *b = buffer;
+
+	int c = '\0';
+
+	while ((c = fgetc(fh)) && c != ')' && c != ';')
+		if (b < buffer + 255)
+			*b++ = c;
+
+	*b = '\0';
+
+	if (c == ';')
+		fseek(fh, -1, SEEK_CUR);
+	else if (c == ')')
+		debug_printf("Found call '%s'", buffer);
+
+	return (c == ')') ? TRUE : FALSE;
 }
