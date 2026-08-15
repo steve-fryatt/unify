@@ -184,6 +184,11 @@ static void test_suite_load(struct test_suite_block *instance)
 
 	test_suite_find_files(instance, TEST_FILE_STATUS_SOURCE);
 	test_suite_find_files(instance, TEST_FILE_STATUS_ABSOLUTE);
+
+	/* Run a test (TODO -- Remove this!) */
+
+	if (instance->test_files != NULL)
+		test_file_execute(instance->test_files);
 }
 
 /**

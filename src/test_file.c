@@ -38,17 +38,21 @@
 /* OSLib header files */
 
 #include "oslib/os.h"
+#include "oslib/taskwindow.h"
 #include "oslib/wimp.h"
 
 /* SF-Lib header files. */
 
 #include "sflib/debug.h"
+#include "sflib/event.h"
 #include "sflib/heap.h"
 #include "sflib/string.h"
 
 /* Application header files */
 
 #include "test_file.h"
+
+#include "main.h"
 
 /**
  * The maximum length of a test file name.
@@ -89,6 +93,20 @@ static osbool test_file_scan_source(char *filename);
 static osbool test_file_scan_block(FILE *fh, int level);
 static osbool test_file_found_definition(FILE *fh);
 static osbool test_file_found_call(FILE *fh);
+static osbool test_file_task_window_ego(wimp_message *message);
+static osbool test_file_task_window_morio(wimp_message *message);
+static osbool test_file_task_window_output(wimp_message *message);
+
+/**
+ * Initialise the Test File code.
+ */
+
+void test_file_initialise(void)
+{
+	event_add_message_handler(message_TASK_WINDOW_EGO, EVENT_MESSAGE_INCOMING, test_file_task_window_ego);
+	event_add_message_handler(message_TASK_WINDOW_MORIO, EVENT_MESSAGE_INCOMING, test_file_task_window_morio);
+	event_add_message_handler(message_TASK_WINDOW_OUTPUT, EVENT_MESSAGE_INCOMING, test_file_task_window_output);
+}
 
 /**
  * Create a new Test File instance and link it in to the supplied
@@ -307,4 +325,56 @@ static osbool test_file_found_call(FILE *fh)
 		debug_printf("Found call '%s'", buffer);
 
 	return (c == ')') ? TRUE : FALSE;
+}
+
+osbool test_file_execute(struct test_file_block *instance)
+{
+	if (instance == NULL)
+		return FALSE;
+
+	char command[1024];
+
+	string_printf(command, 2014,
+			"TaskWindow \"Run %s\" -wimpslot 1024K -name \"Unit Test\" -quit -task &%08x -txt &%08x",
+			instance->absolute_file, main_task_handle, 0x1u
+	);
+
+	wimp_t child_task;
+
+	os_error *error = xwimp_start_task(command, &child_task);
+
+	debug_printf("Launched %s", command);
+	debug_printf("Result = 0x%x, Child = 0x%x", error, child_task);
+
+	return (error == NULL) ? TRUE : FALSE;
+}
+
+
+
+
+static osbool test_file_task_window_ego(wimp_message *message)
+{
+	taskwindow_full_message_ego *ego = (taskwindow_full_message_ego *) message;
+
+	debug_printf("Message_TaskWindowEgo, txt=0x%x", ego->txt);
+	return TRUE;
+}
+
+static osbool test_file_task_window_morio(wimp_message *message)
+{
+	debug_printf("Message_TaskWindowMorio");
+	return TRUE;
+}
+
+
+static osbool test_file_task_window_output(wimp_message *message)
+{
+	taskwindow_full_message_data *data = (taskwindow_full_message_data *) message;
+
+	char buffer[256];
+
+	string_copy(buffer, data->data, data->data_size);
+
+	debug_printf("Message_TaskWindowOutput (%d): %s", data->data_size, buffer);
+	return TRUE;
 }

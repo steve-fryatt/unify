@@ -38,8 +38,16 @@ enum test_file_status {
 
 struct test_file_block;
 
+/**
+ * Initialise the Test File code.
+ */
+
+void test_file_initialise(void);
+
 void test_file_delete_all(struct test_file_block **list);
 
 void test_file_include_entry(struct test_file_block **list, enum test_file_status type, char* name, char *filename);
+
+osbool test_file_execute(struct test_file_block *instance);
 
 #endif

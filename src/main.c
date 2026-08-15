@@ -59,6 +59,7 @@
 
 #include "iconbar.h"
 #include "test_suite.h"
+#include "test_file.h"
 #include "window.h"
 
 /**
@@ -230,6 +231,7 @@ static void main_initialise(void)
 
 	window_initialise();
 	iconbar_initialise();
+	test_file_initialise();
 
 	templates_close();
 
