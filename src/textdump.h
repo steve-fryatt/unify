@@ -38,6 +38,10 @@ struct textdump_block;
 
 #define TEXTDUMP_NULL 0xffffffff
 
+/**
+ * Use the default allocation block.
+ */
+#define TEXTDUMP_DEFAULT_ALLOCATION (0)
 
 /**
  * Initialise a text storage block.

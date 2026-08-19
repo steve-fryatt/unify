@@ -73,7 +73,7 @@ struct textdump_block *textdump_create(unsigned allocation)
 	if (new == NULL)
 		return NULL;
 
-	new->allocation = (allocation == 0) ? TEXTDUMP_ALLOCATION : allocation;
+	new->allocation = (allocation == TEXTDUMP_DEFAULT_ALLOCATION) ? TEXTDUMP_ALLOCATION : allocation;
 
 	new->text = NULL;
 	new->free = 0;

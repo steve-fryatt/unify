@@ -39,12 +39,15 @@
 #include "oslib/colourtrans.h"
 #include "oslib/font.h"
 #include "oslib/os.h"
+#include "oslib/osspriteop.h"
 #include "oslib/wimp.h"
 
 /* SF-Lib header files. */
 
 #include "sflib/errors.h"
+#include "sflib/event.h"
 #include "sflib/heap.h"
+#include "sflib/string.h"
 #include "sflib/templates.h"
 #include "sflib/windows.h"
 
@@ -66,6 +69,13 @@
 
 #define WINDOW_MINIMUM_SIZE 10
 
+/**
+ * The icon templates.
+ */
+
+#define WINDOW_TEMPLATE_ICON_NAME 0
+#define WINDOW_TEMPLATE_ICON_DETAIL 1
+
 /* Structure definitions. */
 
 /**
@@ -73,19 +83,30 @@
  */
 
 struct window_instance {
-	wimp_w handle;		/**< The Wimp handle of the window.		*/
-	wimp_w pane_handle;	/**< The Wimp handle of the pane.		*/
-	int pane_size;		/**< The height of a toolbar pane, in OS units.	*/
-	int width;		/**< The window width in OS units.		*/
+	struct window_definition *definition;	/**< The window defintion.		*/
+	void *client_data;			/**< The client data pointer.		*/
+
+	wimp_w handle;		/**< The Wimp handle of the window.			*/
+	wimp_w pane_handle;	/**< The Wimp handle of the pane.			*/
+	int pane_size;		/**< The height of a toolbar pane, in OS units.		*/
+	int width;		/**< The window width in OS units.			*/
+
+	int entries;				/**< The number of items in the window.	*/
 };
 
 /* Global variables. */
 
 /**
- * Definition of the block data window.
+ * Definition of the list window.
  */
 
 static wimp_window *window_definition = NULL;
+
+/**
+ * Definition of the list window pane.
+ */
+
+static wimp_window *window_pane_definition = NULL;
 
 /**
  * The font handle for normal text.
@@ -101,66 +122,86 @@ static font_f window_bold_font = font_SYSTEM;
 
 /* Static function prototypes. */
 
-static void window_format_numeric_data(struct window_redraw *value, char *buffer, size_t length);
-static os_error *window_find_fonts(void);
-static void window_lose_fonts(void);
-static os_error *window_paint_text(struct window_redraw *line_info, char *text, os_coord *pos);
+static void window_close_handler(wimp_close *close);
+static void window_redraw_handler(wimp_draw *redraw);
+static void window_scroll_handler(wimp_scroll *scroll);
+
+//static void window_format_numeric_data(struct window_redraw *value, char *buffer, size_t length);
+//static os_error *window_find_fonts(void);
+//static void window_lose_fonts(void);
+//static os_error *window_paint_text(struct window_redraw *line_info, char *text, os_coord *pos);
 
 /**
  * Initialise the text window.
+ *
+ * \param *sprites		Pointet to the user sprite area.
  */
 
-void window_initialise(void)
+void window_initialise(osspriteop_area *sprites)
 {
 	window_definition = templates_load_window("List");
+	window_definition->sprite_area = sprites;
 	window_definition->icon_count = 0;
+	window_pane_definition = templates_load_window("ListPane");
 }
 
 
 /**
- * Create a new text window instance.
+ * Create a new window instance.
  *
- * \param *pane_definition	Pointer to a pane definition, or NULL for none.
- * \return			Pointer to the new instance, or NULL.
+ * \param *pane_definition	Pointer to the window definition.
+ * \param *client_data		Pointer to the client data, or NULL for none.
+ * \return			Pointer to the new instance, or NULL on failure.
  */
 
-struct window_instance *window_create_instance(wimp_window *pane_definition)
+struct window_instance *window_create_instance(struct window_definition *definition, void *client_data)
 {
-	struct window_instance *instance;
-	os_error *error;
+	if (definition == NULL)
+		return NULL;
 
 	/* Allocate the instance memory. */
 
-	instance = heap_alloc(sizeof(struct window_instance));
+	struct window_instance *instance = heap_alloc(sizeof(struct window_instance));
 	if (instance == NULL)
 		return NULL;
 
+	instance->definition = definition;
+	instance->client_data = client_data;
 	instance->handle = NULL;
 	instance->pane_handle = NULL;
 	instance->width = 1200;
 	instance->pane_size = 0;
+	instance->entries = 4;
 
 	/* Create the new window. */
 
-	error = xwimp_create_window(window_definition, &(instance->handle));
+	os_error *error = xwimp_create_window(window_definition, &(instance->handle));
 	if (error != NULL) {
 		error_report_os_error(error, wimp_ERROR_BOX_CANCEL_ICON);
 		window_delete_instance(instance);
 		return NULL;
 	}
 
-	if (pane_definition != NULL) {
-		instance->width = pane_definition->visible.x1 - pane_definition->visible.x0;
-		instance->pane_size = pane_definition->visible.y1 - pane_definition->visible.y0;
-		windows_place_as_toolbar(window_definition, pane_definition, instance->pane_size);
+	/* Create the new window pane. */
 
-		error = xwimp_create_window(pane_definition, &(instance->pane_handle));
-		if (error != NULL) {
-			error_report_os_error(error, wimp_ERROR_BOX_CANCEL_ICON);
-			window_delete_instance(instance);
-			return NULL;
-		}
+//	instance->width = pane_definition->visible.x1 - pane_definition->visible.x0;
+	instance->pane_size = window_pane_definition->visible.y1 - window_pane_definition->visible.y0;
+	windows_place_as_toolbar(window_definition, window_pane_definition, instance->pane_size);
+
+	error = xwimp_create_window(window_pane_definition, &(instance->pane_handle));
+	if (error != NULL) {
+		error_report_os_error(error, wimp_ERROR_BOX_CANCEL_ICON);
+		window_delete_instance(instance);
+		return NULL;
 	}
+
+	event_add_window_user_data(instance->handle, instance);
+	event_add_window_close_event(instance->handle, window_close_handler);
+	event_add_window_redraw_event(instance->handle, window_redraw_handler);
+	event_add_window_scroll_event(instance->handle, window_scroll_handler);
+
+	windows_open(instance->handle);
+	windows_open_nested_as_toolbar(instance->pane_handle, instance->handle, instance->pane_size, FALSE);
 
 	return instance;
 }
@@ -190,56 +231,85 @@ void window_delete_instance(struct window_instance *instance)
 	heap_free(instance);
 }
 
-
 /**
- * Return the Wimp window handle for the window used by a
- * text window instance.
+ * Handle Close events on an instance window.
  *
- * \param *instance		The instance to be queried.
- * \return			The window handle.
+ * \param *close		The Wimp Close data block.
  */
 
-wimp_w window_get_handle(struct window_instance *instance)
+static void window_close_handler(wimp_close *close)
 {
-	if (instance == NULL)
-		return NULL;
+	struct window_instance *instance = event_get_window_user_data(close->w);
 
-	return instance->handle;
+	if (instance != NULL && instance->definition->callback_close != NULL)
+		instance->definition->callback_close(instance->client_data);
 }
 
 
-/**
- * Return the Wimp window handle for the pane used by a
- * text window instance.
- *
- * \param *instance		The instance to be queried.
- * \return			The pane handle.
- */
 
-wimp_w window_get_pane_handle(struct window_instance *instance)
+static void window_redraw_handler(wimp_draw *redraw)
 {
-	if (instance == NULL)
-		return NULL;
+	struct window_instance *instance = event_get_window_user_data(redraw->w);
 
-	return instance->pane_handle;
-}
+	/* Perform the redraw. */
 
+	osbool more = wimp_redraw_window(redraw);
 
-/**
- * Open a text window instance.
- *
- * \param *instance		The instance to be opened.
- */
+	/* Work out the redraw origin. */
 
-void window_open(struct window_instance *instance)
-{
-	if (instance == NULL || instance->handle == NULL)
-		return;
+	int oy = (instance != NULL) ? redraw->box.y1 - redraw->yscroll : 0;
 
-	windows_open(instance->handle);
+	while (more) {
+		if (instance != NULL) {
+			int top = ((oy - redraw->clip.y1) - instance->pane_size) / WINDOW_ROW_HEIGHT;
+	//		int top = WINDOW_REDRAW_TOP(instance->pane_size, oy - redraw->clip.y1);
+			if (top < 0)
+				top = 0;
 
-	if (instance->pane_handle != NULL)
-		windows_open_nested_as_toolbar(instance->pane_handle, instance->handle, instance->pane_size, FALSE);
+			int base = ((oy - redraw->clip.y0) - instance->pane_size) / WINDOW_ROW_HEIGHT;
+	//		int base = WINDOW_REDRAW_BASE(instance->pane_size, oy - redraw->clip.y0);
+			if (base > instance->entries)
+				base = instance->entries;
+
+			wimp_icon *name_icon = window_definition->icons + WINDOW_TEMPLATE_ICON_NAME;
+
+			for (int y = top; y <= base; y++) {
+				if (instance->definition->callback_redraw == NULL)
+					continue;
+
+				struct window_line content;
+
+				if (instance->definition->callback_redraw(y, &content, instance->client_data) == FALSE)
+					continue;
+
+				name_icon->extent.y1 = -((y * WINDOW_ROW_HEIGHT) + WINDOW_ROW_GUTTER + instance->pane_size);
+				name_icon->extent.y0 = window_definition->icons[0].extent.y1 - WINDOW_ROW_ICON_HEIGHT;
+
+	//			window_definition->icons[0].extent.y0 = WINDOW_ROW_Y0(instance->pane_size, y);
+	//			window_definition->icons[0].extent.y1 = WINDOW_ROW_Y1(instance->pane_size, y);
+
+				name_icon->data.indirected_text_and_sprite.text = content.text;
+				switch (content.status) {
+				case WINDOW_STATUS_ERROR:
+					name_icon->data.indirected_text_and_sprite.validation = "Serror";
+					break;
+				case WINDOW_STATUS_FAIL:
+					name_icon->data.indirected_text_and_sprite.validation = "Sfail";
+					break;
+				case WINDOW_STATUS_PASS:
+					name_icon->data.indirected_text_and_sprite.validation = "Spass";
+					break;
+				case WINDOW_STATUS_UNKNOWN:
+					name_icon->data.indirected_text_and_sprite.validation = "Sunknown";
+					break;
+				}
+
+				wimp_plot_icon(name_icon);
+			}
+		}
+
+		more = wimp_get_rectangle(redraw);
+	}
 }
 
 
@@ -252,12 +322,13 @@ void window_open(struct window_instance *instance)
  * \param *scroll		The scroll event data to be processed.
  */
 
-void window_process_scroll_event(struct window_instance *instance, wimp_scroll *scroll)
+static void window_scroll_handler(wimp_scroll *scroll)
 {
-	int	width, height, error;
-
+	struct window_instance *instance = event_get_window_user_data(scroll->w);
 	if (instance == NULL || instance->handle == NULL)
 		return;
+
+	int	width, height, error;
 
 	/* Add in the X scroll offset. */
 
@@ -342,6 +413,63 @@ void window_process_scroll_event(struct window_instance *instance, wimp_scroll *
 
 	wimp_open_window((wimp_open *) scroll);
 }
+
+
+
+
+#if 0
+/**
+ * Return the Wimp window handle for the window used by a
+ * text window instance.
+ *
+ * \param *instance		The instance to be queried.
+ * \return			The window handle.
+ */
+
+wimp_w window_get_handle(struct window_instance *instance)
+{
+	if (instance == NULL)
+		return NULL;
+
+	return instance->handle;
+}
+
+
+/**
+ * Return the Wimp window handle for the pane used by a
+ * text window instance.
+ *
+ * \param *instance		The instance to be queried.
+ * \return			The pane handle.
+ */
+
+wimp_w window_get_pane_handle(struct window_instance *instance)
+{
+	if (instance == NULL)
+		return NULL;
+
+	return instance->pane_handle;
+}
+
+
+/**
+ * Open a text window instance.
+ *
+ * \param *instance		The instance to be opened.
+ */
+
+void window_open(struct window_instance *instance)
+{
+	if (instance == NULL || instance->handle == NULL)
+		return;
+
+	windows_open(instance->handle);
+
+	if (instance->pane_handle != NULL)
+		windows_open_nested_as_toolbar(instance->pane_handle, instance->handle, instance->pane_size, FALSE);
+}
+
+
 
 
 /**
@@ -594,3 +722,5 @@ static os_error *window_paint_text(struct window_redraw *line_info, char *text, 
 
 	return xfont_paint(font, text, font_OS_UNITS | font_KERN | font_GIVEN_FONT, pos->x, pos->y, NULL, NULL, 0);
 }
+
+#endif

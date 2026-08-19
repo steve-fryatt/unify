@@ -31,7 +31,8 @@ APP := !Unify
 #PACKAGE := Unify
 #PACKAGELOC := Desktop
 
-OBJS =  flexutils.o	\
+OBJS =  file_set.o	\
+	flexutils.o	\
 	iconbar.o	\
 	main.o		\
 	test_suite.o	\

@@ -24,7 +24,14 @@
 /**
  * \file: test_suite.h
  *
- * Test Suuite interface.
+ * Test Suite interface.
+ *
+ * A Test Suite is a folder containing unit test source and executable files,
+ * along with all of the associated data for them.
+ *
+ * It will contain a list of one or more File Sets, which contain the details
+ * of the files within the suite at the times when an attempt was made to run
+ * the tests.
  */
 
 #ifndef UNIFY_TEST_SUITE
@@ -62,5 +69,16 @@ void test_suite_delete_instance(struct test_suite_block *instance);
  */
 
 void test_suite_delete_all(void);
+
+/**
+ * Store an item of text in the instance's text dump, returning the index of
+ * the string.
+ *
+ * \param *instance	Poiinter to the Test Suite instance.
+ * \param *text		Pointer to the text to be stored.
+ * \return		The text dump offset, or TEXTDUMP_NULL.
+ */
+
+unsigned test_suite_store_text(struct test_suite_block *instance, char *text);
 
 #endif

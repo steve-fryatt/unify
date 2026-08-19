@@ -30,6 +30,7 @@ SupportURL:https://www.stevefryatt.org.uk/risc-os/programming-tools
 
 BadResource:Failed to locate suitable %0 file.
 BadTemplate:Window template '%0' not found.
+BadSprites:Failed to locate suitable application sprites file.
 
 #LogMenu:Logs
 

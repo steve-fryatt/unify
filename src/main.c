@@ -36,6 +36,7 @@
 #include "oslib/hourglass.h"
 #include "oslib/os.h"
 #include "oslib/osfile.h"
+#include "oslib/osspriteop.h"
 #include "oslib/wimp.h"
 
 /* SF-Lib header files */
@@ -218,6 +219,10 @@ static void main_initialise(void)
 
 	/* Load the window templates. */
 
+	osspriteop_area *sprites = resources_load_user_sprite_area("<Unify$Dir>.Sprites");
+	if (sprites == NULL)
+		error_msgs_report_fatal("BadSprites");
+
 	if (!resources_find_file(resources, res_temp, MAIN_FILENAME_BUFFER_LEN, "Templates", osfile_TYPE_TEMPLATE))
 		error_msgs_param_report_fatal("BadResource", "Templates", NULL, NULL, NULL);
 
@@ -229,7 +234,7 @@ static void main_initialise(void)
 	ihelp_initialise();
 	url_initialise();
 
-	window_initialise();
+	window_initialise(sprites);
 	iconbar_initialise();
 	test_file_initialise();
 

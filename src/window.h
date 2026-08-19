@@ -31,6 +31,7 @@
 #define UNIFY_WINDOW
 
 #include "oslib/os.h"
+#include "oslib/osspriteop.h"
 #include "oslib/wimp.h"
 
 /**
@@ -40,15 +41,55 @@
 struct window_instance;
 
 /**
- * A line redarw type.
+ * The type of window.
  */
 
 enum window_type {
 	WINDOW_TYPE_NONE,
-	WINDOW_TYPE_VALUE,
-	WINDOW_TYPE_TEXT
+	WINDOW_TYPE_SUITE
 };
 
+/**
+ * The line statuses for the window entries.
+ */
+
+enum window_status {
+	WINDOW_STATUS_UNKNOWN,
+	WINDOW_STATUS_ERROR,
+	WINDOW_STATUS_FAIL,
+	WINDOW_STATUS_PASS
+};
+
+/**
+ * Data for a window line redraw.
+ */
+
+struct window_line {
+	enum window_status status;		/**< The entry status.			*/
+	char *text;				/**< The text for the line.		*/
+	int count;				/**< The line count, for suite entries.	*/
+	int total;				/**< The line total, for suite entries.	*/
+};
+
+/**
+ * A client definition for a window instance
+ */
+
+struct window_definition {
+	enum window_type type;			/**< The type of window.		*/
+
+	/**
+	 * Callack when the window closes.
+	 */
+	void (*callback_close)(void *data);
+
+	/**
+	 * Callback for requesting line redraw data.
+	 */
+	osbool (*callback_redraw)(int line, struct window_line *content, void *data);
+};
+
+#if 0
 /**
  * A line redraw data block.
  */
@@ -62,6 +103,7 @@ struct window_redraw {
 	int index;			/**< The index for a value line.		*/
 	int bytes;			/**< The number of bytes for a value line.	*/
 };
+#endif
 
 /**
  * The size of a horizontal scroll step.
@@ -73,7 +115,7 @@ struct window_redraw {
  * The height of a row icon in a window table.
  */
 
-#define WINDOW_ROW_ICON_HEIGHT 36
+#define WINDOW_ROW_ICON_HEIGHT 52
 
 /**
  * The horizontal spacing between rows in a window table.
@@ -144,19 +186,21 @@ struct window_redraw {
 
 /**
  * Initialise the text window.
+ *
+ * \param *sprites		Pointet to the user sprite area.
  */
 
-void window_initialise(void);
+void window_initialise(osspriteop_area *sprites);
 
 /**
- * Create a new text window instance.
+ * Create a new window instance.
  *
- * \param *pane_definition	Pointer to a pane definition, or NULL for none.
- * \return			Pointer to the new instance, or NULL.
+ * \param *pane_definition	Pointer to the window definition.
+ * \param *client_data		Pointer to the client data, or NULL for none.
+ * \return			Pointer to the new instance, or NULL on failure.
  */
 
-struct window_instance *window_create_instance(wimp_window *pane_definition);
-
+struct window_instance *window_create_instance(struct window_definition *definition, void *client_data);
 /**
  * Destroy a text window instance.
  *
@@ -164,7 +208,7 @@ struct window_instance *window_create_instance(wimp_window *pane_definition);
  */
 
 void window_delete_instance(struct window_instance *instance);
-
+#if 0
 /**
  * Return the Wimp window handle for the window used by a
  * text window instance.
@@ -225,5 +269,5 @@ void window_redraw(struct window_instance *instance, wimp_draw *redraw, osbool (
  * */
 
 void window_set_extent(struct window_instance *instance, int lines);
-
+#endif
 #endif

@@ -50,7 +50,10 @@
 
 #include "test_suite.h"
 
+#include "file_set.h"
 #include "test_file.h"
+#include "textdump.h"
+#include "window.h"
 
 /**
  * The maximum length of the name of a test suite.
@@ -74,14 +77,43 @@ struct test_suite_block {
 	char name[TEST_SUITE_NAME_LEN];
 
 	/**
-	 * The path to the suite folder.
+	 * The textdump reference of the path to the suite folder.
 	 */
-	char folder[TEST_SUITE_MAX_PATH_LEN];
+	unsigned suite_folder;
 
-	char source_folder[TEST_SUITE_MAX_FOLDER_LEN];
-	char executable_folder[TEST_SUITE_MAX_FOLDER_LEN];
+	/**
+	 * The textdump reference of the name of the source file folder within
+	 * the suite folder.
+	 */
+	unsigned source_folder;
 
-	struct test_file_block *test_files;
+	/**
+	 * The textdump reference of the name of the executable file folder
+	 * within the suite folder.
+	 */
+	unsigned executable_folder;
+
+	/**
+	 * The window for the test suite.
+	 */
+	struct window_instance *window;
+
+	/**
+	 * The textdump instance for the suite to use.
+	 */
+	struct textdump_block *textdump;
+
+	/**
+	 * Pointer to the list of file sets associated with this suite.
+	 */
+	struct file_set_block *file_sets;
+
+
+
+
+
+
+	struct test_file_block *test_files; // TODO -- Delete Me!!
 
 	/**
 	 * Pointer to the next suite, or NULL.
@@ -99,8 +131,19 @@ struct test_suite_block *test_suite_list = NULL;
 
 /* Static function prototypes. */
 
+static void test_suite_close_handler(void *data);
+static osbool test_suite_redraw_line_handler(int line, struct window_line *content, void *data);
+
 static void test_suite_load(struct test_suite_block *instance);
 static void test_suite_find_files(struct test_suite_block *instance, enum test_file_status type);
+
+/* The Test Suite window definiton. */
+
+static struct window_definition test_suite_window_definition = {
+	.type = WINDOW_TYPE_SUITE,
+	.callback_close = test_suite_close_handler,
+	.callback_redraw = test_suite_redraw_line_handler
+};
 
 /**
  * Create a new Test Suite instance and link it in to the collection of
@@ -117,16 +160,47 @@ osbool test_suite_create_instance(char *folder)
 	if (new == NULL)
 		return FALSE;
 
-	string_copy(new->folder, folder, TEST_SUITE_MAX_PATH_LEN);
-	string_copy(new->source_folder, "tests", TEST_SUITE_MAX_FOLDER_LEN);
-	string_copy(new->executable_folder, "absolute", TEST_SUITE_MAX_FOLDER_LEN);
-
 	new->test_files = NULL;
+	new->window = NULL;
+	new->textdump = NULL;
+	new->file_sets = NULL;
+
+	/* Set up the text dump to store strings for the suite. */
+
+	new->textdump = textdump_create(TEXTDUMP_DEFAULT_ALLOCATION);
+	if (new->textdump == NULL) {
+		test_suite_delete_instance(new);
+		return FALSE;
+	}
+
+	/* Set up the window for the suite. */
+
+	new->window = window_create_instance(&test_suite_window_definition, new);
+	if (new->window == NULL) {
+		test_suite_delete_instance(new);
+		return FALSE;
+	}
+
+	/* Initialise the path and folder names. */
+
+	new->suite_folder = textdump_store(new->textdump, folder);
+	new->source_folder = textdump_store(new->textdump, "tests");
+	new->executable_folder = textdump_store(new->textdump, "absolute");
+
+	if (new->suite_folder == TEXTDUMP_NULL || new->source_folder == TEXTDUMP_NULL ||
+			new->executable_folder == TEXTDUMP_NULL) {
+		test_suite_delete_instance(new);
+		return FALSE;
+	}
+
+	/* Link ourselves into the list of loaded test suites. */
 
 	new->next = test_suite_list;
 	test_suite_list = new;
 
-	test_suite_load(new);
+	/* Load the first file set from the folder. */
+
+	new->file_sets = file_set_create_instance(new, new->file_sets);
 
 	return TRUE;
 }
@@ -143,6 +217,18 @@ void test_suite_delete_instance(struct test_suite_block *instance)
 	if (instance == NULL)
 		return;
 
+	debug_printf("Delete instance 0x%x", instance);
+
+	/* Delete the window. */
+
+	window_delete_instance(instance->window);
+	instance->window = NULL;
+
+	/* Delete the textdump. */
+
+	textdump_destroy(instance->textdump);
+	instance->textdump = NULL;
+
 	/* Unlink the instance from the list of suites. */
 
 	struct test_suite_block **list = &test_suite_list;
@@ -153,9 +239,12 @@ void test_suite_delete_instance(struct test_suite_block *instance)
 	if (*list != NULL)
 		*list = instance->next;
 
-	/* Free the memory associated with the instance. */
+	/* Free the memory associated with the file sets. */
 
-	test_file_delete_all(&(instance->test_files));
+	while (instance->file_sets != NULL)
+		instance->file_sets = file_set_delete_instance(instance->file_sets);
+
+//	test_file_delete_all(&(instance->test_files)); -- TODO -- Delete Me!!
 
 	heap_free(instance);
 }
@@ -172,12 +261,66 @@ void test_suite_delete_all(void)
 }
 
 /**
+ * Store an item of text in the instance's text dump, returning the index of
+ * the string.
+ *
+ * \param *instance	Poiinter to the Test Suite instance.
+ * \param *text		Pointer to the text to be stored.
+ * \return		The text dump offset, or TEXTDUMP_NULL.
+ */
+
+unsigned test_suite_store_text(struct test_suite_block *instance, char *text)
+{
+	if (instance == NULL)
+		return TEXTDUMP_NULL;
+
+	return textdump_store(instance->textdump, text);
+}
+
+/**
+ * Handle close events from an instance window.
+ *
+ * \param *data		Pointer to our client data, which should be a
+ *			pointer to an instance.
+ */
+
+static void test_suite_close_handler(void *data)
+{
+	struct test_suite_block *instance = data;
+	if (instance == NULL)
+		return;
+
+	test_suite_delete_instance(instance);
+}
+
+static osbool test_suite_redraw_line_handler(int line, struct window_line *content, void *data)
+{
+	struct test_suite_block *instance = data;
+	if (instance == NULL)
+		return FALSE;
+
+	char *textdump_base = textdump_get_base(instance->textdump);
+	if (textdump_base == NULL)
+		return FALSE;
+
+	unsigned text = file_set_get_object_name(instance->file_sets, line);
+	if (text == TEXTDUMP_NULL)
+		return FALSE;
+
+	content->text = textdump_base + text;
+	content->status = WINDOW_STATUS_FAIL;
+
+	return TRUE;
+}
+
+
+/**
  * Load a test suite from a folder on disc.
  *
  * \param *instance	Pointer to the instance to load
  */
 
-static void test_suite_load(struct test_suite_block *instance)
+static void test_suite_load(struct test_suite_block *instance) // TODO -- Delete Me!!!
 {
 	if (instance == NULL)
 		return;
@@ -202,6 +345,15 @@ static void test_suite_find_files(struct test_suite_block *instance, enum test_f
 	if (instance == NULL)
 		return;
 
+	/* Find the base for the filenames.
+	 *
+	 * *** This only remains valid until we shift the flex heap about! ***
+	 */
+
+	char *textdump_base =  textdump_get_base(instance->textdump);
+	if (textdump_base == NULL)
+		return;
+
 	/* Configure for the target file. */
 
 	char folder[TEST_SUITE_MAX_PATH_LEN];
@@ -211,14 +363,20 @@ static void test_suite_find_files(struct test_suite_block *instance, enum test_f
 
 	switch (type) {
 	case TEST_FILE_STATUS_SOURCE:
-		string_printf(folder, TEST_SUITE_MAX_PATH_LEN, "%s.%s", instance->folder, instance->source_folder);
+		string_printf(folder, TEST_SUITE_MAX_PATH_LEN, "%s.%s",
+				textdump_base + instance->suite_folder,
+				textdump_base + instance->source_folder
+		);
 		pattern = "*/c";
 		suffix = "/c";
 		filetype = osfile_TYPE_TEXT;
 		break;
 
 	case TEST_FILE_STATUS_ABSOLUTE:
-		string_printf(folder, TEST_SUITE_MAX_PATH_LEN, "%s.%s", instance->folder, instance->executable_folder);
+		string_printf(folder, TEST_SUITE_MAX_PATH_LEN, "%s.%s",
+				textdump_base + instance->suite_folder,
+				textdump_base + instance->executable_folder
+		);
 		filetype = osfile_TYPE_ABSOLUTE;
 		break;
 
