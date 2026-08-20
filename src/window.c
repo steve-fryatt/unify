@@ -268,19 +268,19 @@ static void window_redraw_handler(wimp_draw *redraw)
 
 			int base = ((oy - redraw->clip.y0) - instance->pane_size) / WINDOW_ROW_HEIGHT;
 	//		int base = WINDOW_REDRAW_BASE(instance->pane_size, oy - redraw->clip.y0);
-			if (base > instance->entries)
-				base = instance->entries;
+	//		if (base > instance->entries)
+	//			base = instance->entries;
 
 			wimp_icon *name_icon = window_definition->icons + WINDOW_TEMPLATE_ICON_NAME;
 
 			for (int y = top; y <= base; y++) {
 				if (instance->definition->callback_redraw == NULL)
-					continue;
+					break;
 
 				struct window_line content;
 
 				if (instance->definition->callback_redraw(y, &content, instance->client_data) == FALSE)
-					continue;
+					break;
 
 				name_icon->extent.y1 = -((y * WINDOW_ROW_HEIGHT) + WINDOW_ROW_GUTTER + instance->pane_size);
 				name_icon->extent.y0 = window_definition->icons[0].extent.y1 - WINDOW_ROW_ICON_HEIGHT;

@@ -53,6 +53,8 @@
 #include "file_instance.h"
 
 #include "main.h"
+#include "suite.h"
+#include "textdump.h"
 
 /**
  * The maximum length of a test file name.
@@ -64,30 +66,32 @@
 
 struct file_instance_block {
 	/**
-	 * The base name of the file, without any suffixes.
+	 * Pointer to the parent test suite.
 	 */
-	char filename[FILE_INSTANCE_NAME_LEN];
+	struct suite_block *parent;
+
+	/**
+	 * Pointer to the next file in the suite, or NULL.
+	 */
+	struct file_instance_block *next;
+
+	/**
+	 * The textdump reference of the base name of the file, with no
+	 * suffixes.
+	 */
+	unsigned name;
 
 	enum file_instance_status status;
 
 	char source_file[FILE_INSTANCE_NAME_LEN];
 
 	char absolute_file[FILE_INSTANCE_NAME_LEN];
-
-
-	/**
-	 * Pointer to the next file in the suite, or NULL.
-	 */
-	struct file_instance_block *next;
 };
 
 /* Global variables. */
 
 
 /* Static function prototypes. */
-
-static struct file_instance_block *file_instance_create_instance(struct file_instance_block **list, char *name);
-static void file_instance_delete_instance(struct file_instance_block **list, struct file_instance_block *instance);
 
 static osbool file_instance_scan_source(char *filename);
 static osbool file_instance_scan_block(FILE *fh, int level);
@@ -109,69 +113,80 @@ void file_instance_initialise(void)
 }
 
 /**
- * Create a new Test File instance and link it in to the supplied
- * collection of active instances.
+ * Create a new file instance and link it to the supplied parent suite.
  *
- * \param *folder	Pointer to the name of the folder holding the
- *			test suite files.
+ * \param *parent	Pointer to the parent suite.
+ * \param *name		Pointer to the name of the file.
  * \return		TRUE if successful; FALSE on error.
  */
 
-static struct file_instance_block *file_instance_create_instance(struct file_instance_block **list, char *name)
+struct file_instance_block *file_instance_create_instance(struct suite_block *parent, char *name)
 {
-	if (list == NULL || name == NULL)
+	if (parent == NULL || name == NULL)
 		return NULL;
 
 	struct file_instance_block *new = heap_alloc(sizeof(struct file_instance_block));
 	if (new == NULL)
 		return NULL;
 
+	new->parent = parent;
 	new->status = FILE_INSTANCE_STATUS_NONE;
-	string_copy(new->filename, name, FILE_INSTANCE_NAME_LEN);
 	*new->source_file = '\0';
 	*new->absolute_file = '\0';
 
-	new->next = *list;
-	*list = new;
+	new->name = suite_store_text(parent, name);
+	if (new->name == TEXTDUMP_NULL) {
+		file_instance_delete_instance(new);
+		return NULL;
+	}
+
+	new->next = suite_store_file_instance(parent, new);
+
+	debug_printf("Creating new file instance 0x%x in suite 0x%x for %s", new, parent, name);
 
 	return new;
 }
 
 /**
- * Delete a Test File instance and delink it from the collection of
- * active instances.
+ * Delete a Test File instance.
+ *
+ * NB: It is left up to the caller to do something sensible with any linked
+ * list references. Currently this is called by the suite when cleaning up on
+ * deletion, and that just picks its way down the list removing items as it
+ * goes.
  *
  * \param *instance	Pointer to the instance to be deleted.
+ * \return		Pointer to the next file instance known to the instance,
+ *			or NULL if there wasn't one.
  */
 
-static void file_instance_delete_instance(struct file_instance_block **list, struct file_instance_block *instance)
+struct file_instance_block *file_instance_delete_instance(struct file_instance_block *instance)
 {
-	if (list == NULL || instance == NULL)
-		return;
+	if (instance == NULL)
+		return NULL;
 
-	/* Unlink the instance from the list of suites. */
-
-	while (*list != NULL && *list != instance)
-		list = &((*list)->next);
-
-	if (*list != NULL)
-		*list = instance->next;
+	struct file_instance_block *next = instance->next;
 
 	/* Free the memory associated with the instance. */
 
 	heap_free(instance);
+
+	debug_printf("File instance deleted: 0x%x", instance);
+
+	return next;
 }
 
-/**
- * Delete all active Test Suite instances and free all resources
- * associated with them.
- */
-
-void file_instance_delete_all(struct file_instance_block **list)
+unsigned file_instance_get_name(struct file_instance_block *instance)
 {
-	while (*list != NULL)
-		file_instance_delete_instance(list, *list);
+	if (instance == NULL)
+		return TEXTDUMP_NULL;
+
+	return instance->name;
 }
+
+
+#if 0
+
 
 void file_instance_include_entry(struct file_instance_block **list, enum file_instance_status type, char* name, char *filename)
 {
@@ -213,7 +228,7 @@ void file_instance_include_entry(struct file_instance_block **list, enum file_in
 		break;
 	}
 }
-
+#endif
 
 static osbool file_instance_scan_source(char *filename)
 {

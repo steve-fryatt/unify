@@ -49,6 +49,8 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 
 struct file_set_block *file_set_delete_instance(struct file_set_block *instance);
 
+size_t file_set_get_object_count(struct file_set_block *instance);
+
 unsigned file_set_get_object_name(struct file_set_block *instance, int i);
 
 #endif

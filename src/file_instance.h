@@ -30,6 +30,8 @@
 #ifndef UNIFY_FILE_INSTANCE
 #define UNIFY_FILE_INSTANCE
 
+#include "suite.h"
+
 enum file_instance_status {
 	FILE_INSTANCE_STATUS_NONE = 0,
 	FILE_INSTANCE_STATUS_SOURCE = 1,	/**< The test file has source.		*/
@@ -44,9 +46,34 @@ struct file_instance_block;
 
 void file_instance_initialise(void);
 
-void file_instance_delete_all(struct file_instance_block **list);
+/**
+ * Create a new file instance and link it to the supplied parent suite.
+ *
+ * \param *parent	Pointer to the parent suite.
+ * \param *name		Pointer to the name of the file.
+ * \return		TRUE if successful; FALSE on error.
+ */
 
-void file_instance_include_entry(struct file_instance_block **list, enum file_instance_status type, char* name, char *filename);
+struct file_instance_block *file_instance_create_instance(struct suite_block *parent, char *name);
+
+/**
+ * Delete a Test File instance.
+ *
+ * NB: It is left up to the caller to do something sensible with any linked
+ * list references. Currently this is called by the suite when cleaning up on
+ * deletion, and that just picks its way down the list removing items as it
+ * goes.
+ *
+ * \param *instance	Pointer to the instance to be deleted.
+ * \return		Pointer to the next file instance known to the instance,
+ *			or NULL if there wasn't one.
+ */
+
+struct file_instance_block *file_instance_delete_instance(struct file_instance_block *instance);
+
+unsigned file_instance_get_name(struct file_instance_block *instance);
+
+//void file_instance_include_entry(struct file_instance_block **list, enum file_instance_status type, char* name, char *filename);
 
 osbool file_instance_execute(struct file_instance_block *instance);
 

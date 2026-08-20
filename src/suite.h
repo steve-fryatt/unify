@@ -38,10 +38,21 @@
 #define UNIFY_SUITE
 
 /**
+ * The folder types within a test suite.
+ */
+
+enum suite_folder {
+	SUITE_FOLDER_SOURCE,
+	SUITE_FOLDER_EXECUTABLE
+};
+
+/**
  * A test suite instance.
  */
 
 struct suite_block;
+
+#include "file_instance.h"
 
 /**
  * Create a new Test Suite instance and link it in to the collection of
@@ -80,5 +91,9 @@ void suite_delete_all(void);
  */
 
 unsigned suite_store_text(struct suite_block *instance, char *text);
+
+struct file_instance_block *suite_store_file_instance(struct suite_block *instance, struct file_instance_block *file_instance);
+
+osbool suite_read_folder_path(struct suite_block *instance, char *buffer, size_t length, enum suite_folder folder);
 
 #endif

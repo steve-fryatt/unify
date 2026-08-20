@@ -35,14 +35,9 @@
 
 /* OSLib header files */
 
-#include "oslib/os.h"
-#include "oslib/osfile.h"
-#include "oslib/osgbpb.h"
-
 /* SF-Lib header files. */
 
 #include "sflib/debug.h"
-#include "sflib/general.h"
 #include "sflib/heap.h"
 #include "sflib/string.h"
 
@@ -60,13 +55,6 @@
  */
 
 #define SUITE_NAME_LEN 64
-
-/**
- * The maximum length of a file path name.
- */
-
-#define SUITE_MAX_PATH_LEN 256
-#define SUITE_MAX_FOLDER_LEN 64
 
 /* Structure definitions. */
 
@@ -108,12 +96,10 @@ struct suite_block {
 	 */
 	struct file_set_block *file_sets;
 
-
-
-
-
-
-	struct file_instance_block *file_instances; // TODO -- Delete Me!!
+	/**
+	 * Pointer to the list if file instances associated with this suite.
+	 */
+	struct file_instance_block *file_instances;
 
 	/**
 	 * Pointer to the next suite, or NULL.
@@ -133,9 +119,6 @@ struct suite_block *suite_list = NULL;
 
 static void suite_close_handler(void *data);
 static osbool suite_redraw_line_handler(int line, struct window_line *content, void *data);
-
-static void suite_load(struct suite_block *instance);
-static void suite_find_files(struct suite_block *instance, enum file_instance_status type);
 
 /* The Test Suite window definiton. */
 
@@ -160,10 +143,10 @@ osbool suite_create_instance(char *folder)
 	if (new == NULL)
 		return FALSE;
 
-	new->file_instances = NULL;
 	new->window = NULL;
 	new->textdump = NULL;
 	new->file_sets = NULL;
+	new->file_instances = NULL;
 
 	/* Set up the text dump to store strings for the suite. */
 
@@ -197,6 +180,8 @@ osbool suite_create_instance(char *folder)
 
 	new->next = suite_list;
 	suite_list = new;
+
+	debug_printf("\\DCreating new suite 0x%x...", new);
 
 	/* Load the first file set from the folder. */
 
@@ -244,7 +229,12 @@ void suite_delete_instance(struct suite_block *instance)
 	while (instance->file_sets != NULL)
 		instance->file_sets = file_set_delete_instance(instance->file_sets);
 
-//	file_instance_delete_all(&(instance->file_instances)); -- TODO -- Delete Me!!
+	/* Free the memory associated with the file instances. */
+
+	while (instance->file_instances != NULL)
+		instance->file_instances = file_instance_delete_instance(instance->file_instances);
+
+	/* Free the suite memory itself. */
 
 	heap_free(instance);
 }
@@ -275,6 +265,53 @@ unsigned suite_store_text(struct suite_block *instance, char *text)
 		return TEXTDUMP_NULL;
 
 	return textdump_store(instance->textdump, text);
+}
+
+
+struct file_instance_block *suite_store_file_instance(struct suite_block *instance, struct file_instance_block *file_instance)
+{
+	if (instance == NULL || file_instance == NULL)
+		return NULL;
+
+	struct file_instance_block *next = instance->file_instances;
+	instance->file_instances = file_instance;
+
+	return next;
+}
+
+osbool suite_read_folder_path(struct suite_block *instance, char *buffer, size_t length, enum suite_folder folder)
+{
+	if (buffer == NULL || length == 0)
+		return FALSE;
+
+	*buffer = '\0';
+
+	if (instance == NULL)
+		return FALSE;
+
+	char *textdump_base =  textdump_get_base(instance->textdump);
+	if (textdump_base == NULL)
+		return FALSE;
+
+	unsigned folder_offset = TEXTDUMP_NULL;
+
+	switch (folder) {
+	case SUITE_FOLDER_SOURCE:
+		folder_offset = instance->source_folder;
+		break;
+	case SUITE_FOLDER_EXECUTABLE:
+		folder_offset = instance->executable_folder;
+		break;
+	default:
+		return FALSE;
+	}
+
+	string_printf(buffer, length, "%s.%s",
+			textdump_base + instance->suite_folder,
+			textdump_base + folder_offset
+	);
+
+	return TRUE;
 }
 
 /**
@@ -311,129 +348,4 @@ static osbool suite_redraw_line_handler(int line, struct window_line *content, v
 	content->status = WINDOW_STATUS_FAIL;
 
 	return TRUE;
-}
-
-
-/**
- * Load a test suite from a folder on disc.
- *
- * \param *instance	Pointer to the instance to load
- */
-
-static void suite_load(struct suite_block *instance) // TODO -- Delete Me!!!
-{
-	if (instance == NULL)
-		return;
-
-	suite_find_files(instance, FILE_INSTANCE_STATUS_SOURCE);
-	suite_find_files(instance, FILE_INSTANCE_STATUS_ABSOLUTE);
-
-	/* Run a test (TODO -- Remove this!) */
-
-	if (instance->file_instances != NULL)
-		file_instance_execute(instance->file_instances);
-}
-
-/**
- * Find a collection of files within a folder.
- *
- * \param
- */
-
-static void suite_find_files(struct suite_block *instance, enum file_instance_status type)
-{
-	if (instance == NULL)
-		return;
-
-	/* Find the base for the filenames.
-	 *
-	 * *** This only remains valid until we shift the flex heap about! ***
-	 */
-
-	char *textdump_base =  textdump_get_base(instance->textdump);
-	if (textdump_base == NULL)
-		return;
-
-	/* Configure for the target file. */
-
-	char folder[SUITE_MAX_PATH_LEN];
-	char *pattern = NULL;
-	char *suffix = NULL;
-	unsigned filetype = 0x0u;
-
-	switch (type) {
-	case FILE_INSTANCE_STATUS_SOURCE:
-		string_printf(folder, SUITE_MAX_PATH_LEN, "%s.%s",
-				textdump_base + instance->suite_folder,
-				textdump_base + instance->source_folder
-		);
-		pattern = "*/c";
-		suffix = "/c";
-		filetype = osfile_TYPE_TEXT;
-		break;
-
-	case FILE_INSTANCE_STATUS_ABSOLUTE:
-		string_printf(folder, SUITE_MAX_PATH_LEN, "%s.%s",
-				textdump_base + instance->suite_folder,
-				textdump_base + instance->executable_folder
-		);
-		filetype = osfile_TYPE_ABSOLUTE;
-		break;
-
-	default:
-		return;
-	}
-
-	/* Read the files in the folder, and process any which match. */
-
-	byte buffer[1024];
-	char filename[SUITE_MAX_PATH_LEN];
-	int count = 0, context = 0;
-	os_error *error = NULL;
-
-	do {
-		error = xosgbpb_dir_entries_info(folder, (osgbpb_info_list *) buffer, 100, context, 1024, pattern, &count, &context);
-
-		if (error == NULL && count > 0) {
-			byte *buffer_offset = buffer;
-
-			for (int i = 0; i < count; i++) {
-				osgbpb_info *entry = (osgbpb_info *) buffer_offset;
-				buffer_offset += WORDALIGN(21 + strlen(entry->name));
-
-				/* We're only interested in files. */
-
-				if (entry->obj_type != fileswitch_IS_FILE)
-					continue;
-
-				/* We don't care about untyped files. */
-
-				if ((entry->load_addr & 0xfff00000u) != 0xfff00000u)
-					continue;
-
-				/* Check if this is the correct type; ignore if not. */
-
-				if (((entry->load_addr & osfile_FILE_TYPE) >> osfile_FILE_TYPE_SHIFT) != filetype)
-					continue;
-
-				/* Assemble the full pathname of the file. */
-
-				string_printf(filename, SUITE_MAX_PATH_LEN, "%s.%s", folder, entry->name);
-
-				/* If there's a suffix to the name, remove it. */
-
-				if (suffix != NULL) {
-					int name_length = strlen(entry->name);
-					int suffix_length = strlen(suffix);
-
-					if ((name_length > suffix_length) && (string_nocase_strcmp(entry->name + name_length - suffix_length, suffix) == 0))
-						*(entry->name + name_length - suffix_length) = '\0';
-				}
-
-				file_instance_include_entry(&(instance->file_instances), type, entry->name, filename);
-			}
-
-
-		}
-	} while (error == NULL && context != -1);
 }
