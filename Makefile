@@ -31,12 +31,12 @@ APP := !Unify
 #PACKAGE := Unify
 #PACKAGELOC := Desktop
 
-OBJS =  file_set.o	\
+OBJS =  file_instance.o	\
+	file_set.o	\
 	flexutils.o	\
 	iconbar.o	\
 	main.o		\
-	test_suite.o	\
-	test_file.o	\
+	suite.o		\
 	textdump.o	\
 	window.o
 

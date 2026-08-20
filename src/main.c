@@ -59,8 +59,8 @@
 #include "main.h"
 
 #include "iconbar.h"
-#include "test_suite.h"
-#include "test_file.h"
+#include "suite.h"
+#include "file_instance.h"
 #include "window.h"
 
 /**
@@ -112,7 +112,7 @@ int main(void)
 	main_poll_loop();
 
 	msgs_terminate();
-	test_suite_delete_all();
+	suite_delete_all();
 
 	wimp_close_down(main_task_handle);
 
@@ -236,7 +236,7 @@ static void main_initialise(void)
 
 	window_initialise(sprites);
 	iconbar_initialise();
-	test_file_initialise();
+	file_instance_initialise();
 
 	templates_close();
 

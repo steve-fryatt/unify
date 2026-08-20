@@ -33,7 +33,7 @@
 #ifndef UNIFY_FILE_SET
 #define UNIFY_FILE_SET
 
-#include "test_suite.h"
+#include "suite.h"
 
 /**
  * Create a new file set instance, by scanning the parent suite and creating a
@@ -45,7 +45,7 @@
  * \return			Pointer to the new file set, or NULL on failure.
  */
 
-struct file_set_block *file_set_create_instance(struct test_suite_block *parent, struct file_set_block *previous);
+struct file_set_block *file_set_create_instance(struct suite_block *parent, struct file_set_block *previous);
 
 struct file_set_block *file_set_delete_instance(struct file_set_block *instance);
 

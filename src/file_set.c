@@ -50,7 +50,7 @@
 #include "file_set.h"
 
 #include "flexutils.h"
-#include "test_suite.h"
+#include "suite.h"
 #include "textdump.h"
 
 
@@ -68,7 +68,7 @@ struct file_set_block {
 	/**
 	 * Pointer to the parent test suite.
 	 */
-	struct test_suite_block *parent;
+	struct suite_block *parent;
 
 	/**
 	 * Pointer to the preceding file set.
@@ -102,7 +102,7 @@ struct file_set_block {
  * \return			Pointer to the new file set, or NULL on failure.
  */
 
-struct file_set_block *file_set_create_instance(struct test_suite_block *parent, struct file_set_block *previous)
+struct file_set_block *file_set_create_instance(struct suite_block *parent, struct file_set_block *previous)
 {
 	struct file_set_block *new = heap_alloc(sizeof(struct file_set_block));
 	if (new == NULL)
@@ -128,7 +128,7 @@ struct file_set_block *file_set_create_instance(struct test_suite_block *parent,
 	for (int i = 0; i < new->object_count; i++) {
 		char b[64];
 		string_printf(b, 64, "Object %d", i + 1);
-		new->objects[i].name = test_suite_store_text(new->parent, b);
+		new->objects[i].name = suite_store_text(new->parent, b);
 	}
 
 	return new;

@@ -55,7 +55,7 @@
 #include "iconbar.h"
 
 #include "main.h"
-#include "test_suite.h"
+#include "suite.h"
 
 /**
  * Iconbar Menu Entries
@@ -224,7 +224,7 @@ static osbool iconbar_load_suite_folder(wimp_w w, wimp_i i, unsigned filetype, c
 	if (filetype != osfile_TYPE_DIR)
 		return FALSE;
 
-	test_suite_create_instance(filename);
+	suite_create_instance(filename);
 
 	return TRUE;
 }

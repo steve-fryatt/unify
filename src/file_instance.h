@@ -22,32 +22,32 @@
  */
 
 /**
- * \file: test_file.h
+ * \file: file_instance.h
  *
  * Test File interface.
  */
 
-#ifndef UNIFY_TEST_FILE
-#define UNIFY_TEST_FILE
+#ifndef UNIFY_FILE_INSTANCE
+#define UNIFY_FILE_INSTANCE
 
-enum test_file_status {
-	TEST_FILE_STATUS_NONE = 0,
-	TEST_FILE_STATUS_SOURCE = 1,	/**< The test file has source.		*/
-	TEST_FILE_STATUS_ABSOLUTE = 2	/**< The test file has an executable.	*/
+enum file_instance_status {
+	FILE_INSTANCE_STATUS_NONE = 0,
+	FILE_INSTANCE_STATUS_SOURCE = 1,	/**< The test file has source.		*/
+	FILE_INSTANCE_STATUS_ABSOLUTE = 2	/**< The test file has an executable.	*/
 };
 
-struct test_file_block;
+struct file_instance_block;
 
 /**
  * Initialise the Test File code.
  */
 
-void test_file_initialise(void);
+void file_instance_initialise(void);
 
-void test_file_delete_all(struct test_file_block **list);
+void file_instance_delete_all(struct file_instance_block **list);
 
-void test_file_include_entry(struct test_file_block **list, enum test_file_status type, char* name, char *filename);
+void file_instance_include_entry(struct file_instance_block **list, enum file_instance_status type, char* name, char *filename);
 
-osbool test_file_execute(struct test_file_block *instance);
+osbool file_instance_execute(struct file_instance_block *instance);
 
 #endif

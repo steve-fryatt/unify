@@ -22,7 +22,7 @@
  */
 
 /**
- * \file: test_file.c
+ * \file: file_instance.c
  *
  * Test File implementation.
  */
@@ -50,7 +50,7 @@
 
 /* Application header files */
 
-#include "test_file.h"
+#include "file_instance.h"
 
 #include "main.h"
 
@@ -58,27 +58,27 @@
  * The maximum length of a test file name.
  */
 
-#define TEST_FILE_NAME_LEN 256
+#define FILE_INSTANCE_NAME_LEN 256
 
 /* Structure definitions. */
 
-struct test_file_block {
+struct file_instance_block {
 	/**
 	 * The base name of the file, without any suffixes.
 	 */
-	char filename[TEST_FILE_NAME_LEN];
+	char filename[FILE_INSTANCE_NAME_LEN];
 
-	enum test_file_status status;
+	enum file_instance_status status;
 
-	char source_file[TEST_FILE_NAME_LEN];
+	char source_file[FILE_INSTANCE_NAME_LEN];
 
-	char absolute_file[TEST_FILE_NAME_LEN];
+	char absolute_file[FILE_INSTANCE_NAME_LEN];
 
 
 	/**
 	 * Pointer to the next file in the suite, or NULL.
 	 */
-	struct test_file_block *next;
+	struct file_instance_block *next;
 };
 
 /* Global variables. */
@@ -86,26 +86,26 @@ struct test_file_block {
 
 /* Static function prototypes. */
 
-static struct test_file_block *test_file_create_instance(struct test_file_block **list, char *name);
-static void test_file_delete_instance(struct test_file_block **list, struct test_file_block *instance);
+static struct file_instance_block *file_instance_create_instance(struct file_instance_block **list, char *name);
+static void file_instance_delete_instance(struct file_instance_block **list, struct file_instance_block *instance);
 
-static osbool test_file_scan_source(char *filename);
-static osbool test_file_scan_block(FILE *fh, int level);
-static osbool test_file_found_definition(FILE *fh);
-static osbool test_file_found_call(FILE *fh);
-static osbool test_file_task_window_ego(wimp_message *message);
-static osbool test_file_task_window_morio(wimp_message *message);
-static osbool test_file_task_window_output(wimp_message *message);
+static osbool file_instance_scan_source(char *filename);
+static osbool file_instance_scan_block(FILE *fh, int level);
+static osbool file_instance_found_definition(FILE *fh);
+static osbool file_instance_found_call(FILE *fh);
+static osbool file_instance_task_window_ego(wimp_message *message);
+static osbool file_instance_task_window_morio(wimp_message *message);
+static osbool file_instance_task_window_output(wimp_message *message);
 
 /**
  * Initialise the Test File code.
  */
 
-void test_file_initialise(void)
+void file_instance_initialise(void)
 {
-	event_add_message_handler(message_TASK_WINDOW_EGO, EVENT_MESSAGE_INCOMING, test_file_task_window_ego);
-	event_add_message_handler(message_TASK_WINDOW_MORIO, EVENT_MESSAGE_INCOMING, test_file_task_window_morio);
-	event_add_message_handler(message_TASK_WINDOW_OUTPUT, EVENT_MESSAGE_INCOMING, test_file_task_window_output);
+	event_add_message_handler(message_TASK_WINDOW_EGO, EVENT_MESSAGE_INCOMING, file_instance_task_window_ego);
+	event_add_message_handler(message_TASK_WINDOW_MORIO, EVENT_MESSAGE_INCOMING, file_instance_task_window_morio);
+	event_add_message_handler(message_TASK_WINDOW_OUTPUT, EVENT_MESSAGE_INCOMING, file_instance_task_window_output);
 }
 
 /**
@@ -117,17 +117,17 @@ void test_file_initialise(void)
  * \return		TRUE if successful; FALSE on error.
  */
 
-static struct test_file_block *test_file_create_instance(struct test_file_block **list, char *name)
+static struct file_instance_block *file_instance_create_instance(struct file_instance_block **list, char *name)
 {
 	if (list == NULL || name == NULL)
 		return NULL;
 
-	struct test_file_block *new = heap_alloc(sizeof(struct test_file_block));
+	struct file_instance_block *new = heap_alloc(sizeof(struct file_instance_block));
 	if (new == NULL)
 		return NULL;
 
-	new->status = TEST_FILE_STATUS_NONE;
-	string_copy(new->filename, name, TEST_FILE_NAME_LEN);
+	new->status = FILE_INSTANCE_STATUS_NONE;
+	string_copy(new->filename, name, FILE_INSTANCE_NAME_LEN);
 	*new->source_file = '\0';
 	*new->absolute_file = '\0';
 
@@ -144,7 +144,7 @@ static struct test_file_block *test_file_create_instance(struct test_file_block 
  * \param *instance	Pointer to the instance to be deleted.
  */
 
-static void test_file_delete_instance(struct test_file_block **list, struct test_file_block *instance)
+static void file_instance_delete_instance(struct file_instance_block **list, struct file_instance_block *instance)
 {
 	if (list == NULL || instance == NULL)
 		return;
@@ -167,20 +167,20 @@ static void test_file_delete_instance(struct test_file_block **list, struct test
  * associated with them.
  */
 
-void test_file_delete_all(struct test_file_block **list)
+void file_instance_delete_all(struct file_instance_block **list)
 {
 	while (*list != NULL)
-		test_file_delete_instance(list, *list);
+		file_instance_delete_instance(list, *list);
 }
 
-void test_file_include_entry(struct test_file_block **list, enum test_file_status type, char* name, char *filename)
+void file_instance_include_entry(struct file_instance_block **list, enum file_instance_status type, char* name, char *filename)
 {
 	if (list == NULL || name == NULL || filename == NULL)
 		return;
 
 	debug_printf("Process name=%s, type=%d, filename=%s", name, type, filename);
 
-	struct test_file_block *entry = *list;
+	struct file_instance_block *entry = *list;
 
 	while (entry != NULL && string_nocase_strcmp(entry->filename, name) != 0) {
 		debug_printf("Searching against = %s", entry->filename);
@@ -190,7 +190,7 @@ void test_file_include_entry(struct test_file_block **list, enum test_file_statu
 	debug_printf("Existing entry = 0x%x", entry);
 
 	if (entry == NULL)
-		entry = test_file_create_instance(list, name);
+		entry = file_instance_create_instance(list, name);
 
 	debug_printf("Entry to update = 0x%x", entry);
 
@@ -198,15 +198,15 @@ void test_file_include_entry(struct test_file_block **list, enum test_file_statu
 		return;
 
 	switch (type) {
-	case TEST_FILE_STATUS_SOURCE:
-		string_copy(entry->source_file, filename, TEST_FILE_NAME_LEN);
-		entry->status |= TEST_FILE_STATUS_SOURCE;
-		test_file_scan_source(filename);
+	case FILE_INSTANCE_STATUS_SOURCE:
+		string_copy(entry->source_file, filename, FILE_INSTANCE_NAME_LEN);
+		entry->status |= FILE_INSTANCE_STATUS_SOURCE;
+		file_instance_scan_source(filename);
 		break;
 
-	case TEST_FILE_STATUS_ABSOLUTE:
-		string_copy(entry->absolute_file, filename, TEST_FILE_NAME_LEN);
-		entry->status |= TEST_FILE_STATUS_ABSOLUTE;
+	case FILE_INSTANCE_STATUS_ABSOLUTE:
+		string_copy(entry->absolute_file, filename, FILE_INSTANCE_NAME_LEN);
+		entry->status |= FILE_INSTANCE_STATUS_ABSOLUTE;
 		break;
 
 	default:
@@ -215,20 +215,20 @@ void test_file_include_entry(struct test_file_block **list, enum test_file_statu
 }
 
 
-static osbool test_file_scan_source(char *filename)
+static osbool file_instance_scan_source(char *filename)
 {
 	FILE *fh = fopen(filename, "r");
 	if (fh == NULL)
 		return FALSE;
 
-	osbool result = test_file_scan_block(fh, 0);
+	osbool result = file_instance_scan_block(fh, 0);
 
 	fclose(fh);
 
 	return result;
 }
 
-static osbool test_file_scan_block(FILE *fh, int level)
+static osbool file_instance_scan_block(FILE *fh, int level)
 {
 	if (fh == NULL)
 		return FALSE;
@@ -255,15 +255,15 @@ static osbool test_file_scan_block(FILE *fh, int level)
 			/* We're matching a call line. */
 			test_call++;
 			if (*test_call == '\0')
-				test_file_found_call(fh);
+				file_instance_found_call(fh);
 		} else if (level == 0 && test_call == call && *test_definition == c) {
 			/* We're matching a function definition line. */
 			test_definition++;
 			if (*test_definition == '\0')
-				test_file_found_definition(fh);
+				file_instance_found_definition(fh);
 		} else if (c == '{') {
 			/* We've moved into a new block. */
-			test_file_scan_block(fh, level + 1);
+			file_instance_scan_block(fh, level + 1);
 			test_definition = definition;
 			test_call = call;
 		} else if (c == ';') {
@@ -287,7 +287,7 @@ static osbool test_file_scan_block(FILE *fh, int level)
 	return TRUE;
 }
 
-static osbool test_file_found_definition(FILE *fh)
+static osbool file_instance_found_definition(FILE *fh)
 {
 	char buffer[256], *b = buffer;
 
@@ -307,7 +307,7 @@ static osbool test_file_found_definition(FILE *fh)
 	return (c == '(') ? TRUE : FALSE;
 }
 
-static osbool test_file_found_call(FILE *fh)
+static osbool file_instance_found_call(FILE *fh)
 {
 	char buffer[256], *b = buffer;
 
@@ -327,7 +327,7 @@ static osbool test_file_found_call(FILE *fh)
 	return (c == ')') ? TRUE : FALSE;
 }
 
-osbool test_file_execute(struct test_file_block *instance)
+osbool file_instance_execute(struct file_instance_block *instance)
 {
 	if (instance == NULL)
 		return FALSE;
@@ -352,7 +352,7 @@ osbool test_file_execute(struct test_file_block *instance)
 
 
 
-static osbool test_file_task_window_ego(wimp_message *message)
+static osbool file_instance_task_window_ego(wimp_message *message)
 {
 	taskwindow_full_message_ego *ego = (taskwindow_full_message_ego *) message;
 
@@ -360,14 +360,14 @@ static osbool test_file_task_window_ego(wimp_message *message)
 	return TRUE;
 }
 
-static osbool test_file_task_window_morio(wimp_message *message)
+static osbool file_instance_task_window_morio(wimp_message *message)
 {
 	debug_printf("Message_TaskWindowMorio");
 	return TRUE;
 }
 
 
-static osbool test_file_task_window_output(wimp_message *message)
+static osbool file_instance_task_window_output(wimp_message *message)
 {
 	taskwindow_full_message_data *data = (taskwindow_full_message_data *) message;
 

@@ -22,7 +22,7 @@
  */
 
 /**
- * \file: test_suite.h
+ * \file: suite.h
  *
  * Test Suite interface.
  *
@@ -34,14 +34,14 @@
  * the tests.
  */
 
-#ifndef UNIFY_TEST_SUITE
-#define UNIFY_TEST_SUITE
+#ifndef UNIFY_SUITE
+#define UNIFY_SUITE
 
 /**
  * A test suite instance.
  */
 
-struct test_suite_block;
+struct suite_block;
 
 /**
  * Create a new Test Suite instance and link it in to the collection of
@@ -52,7 +52,7 @@ struct test_suite_block;
  * \return		TRUE if successful; FALSE on error.
  */
 
-osbool test_suite_create_instance(char *folder);
+osbool suite_create_instance(char *folder);
 
 /**
  * Delete a Test Suite instance and delink it from the collection of
@@ -61,14 +61,14 @@ osbool test_suite_create_instance(char *folder);
  * \param *instance	Pointer to the instance to be deleted.
  */
 
-void test_suite_delete_instance(struct test_suite_block *instance);
+void suite_delete_instance(struct suite_block *instance);
 
 /**
  * Delete all active Test Suite instances and free all resources
  * associated with them.
  */
 
-void test_suite_delete_all(void);
+void suite_delete_all(void);
 
 /**
  * Store an item of text in the instance's text dump, returning the index of
@@ -79,6 +79,6 @@ void test_suite_delete_all(void);
  * \return		The text dump offset, or TEXTDUMP_NULL.
  */
 
-unsigned test_suite_store_text(struct test_suite_block *instance, char *text);
+unsigned suite_store_text(struct suite_block *instance, char *text);
 
 #endif

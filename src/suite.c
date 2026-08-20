@@ -22,7 +22,7 @@
  */
 
 /**
- * \file: test_suite.c
+ * \file: suite.c
  *
  * Test Suite implementation.
  */
@@ -48,10 +48,10 @@
 
 /* Application header files */
 
-#include "test_suite.h"
+#include "suite.h"
 
 #include "file_set.h"
-#include "test_file.h"
+#include "file_instance.h"
 #include "textdump.h"
 #include "window.h"
 
@@ -59,22 +59,22 @@
  * The maximum length of the name of a test suite.
  */
 
-#define TEST_SUITE_NAME_LEN 64
+#define SUITE_NAME_LEN 64
 
 /**
  * The maximum length of a file path name.
  */
 
-#define TEST_SUITE_MAX_PATH_LEN 256
-#define TEST_SUITE_MAX_FOLDER_LEN 64
+#define SUITE_MAX_PATH_LEN 256
+#define SUITE_MAX_FOLDER_LEN 64
 
 /* Structure definitions. */
 
-struct test_suite_block {
+struct suite_block {
 	/**
 	 * The name of the test suite.
 	 */
-	char name[TEST_SUITE_NAME_LEN];
+	char name[SUITE_NAME_LEN];
 
 	/**
 	 * The textdump reference of the path to the suite folder.
@@ -113,12 +113,12 @@ struct test_suite_block {
 
 
 
-	struct test_file_block *test_files; // TODO -- Delete Me!!
+	struct file_instance_block *file_instances; // TODO -- Delete Me!!
 
 	/**
 	 * Pointer to the next suite, or NULL.
 	 */
-	struct test_suite_block	*next;
+	struct suite_block *next;
 };
 
 /* Global variables. */
@@ -127,22 +127,22 @@ struct test_suite_block {
  * Pointer to the linked list of test suites.
  */
 
-struct test_suite_block *test_suite_list = NULL;
+struct suite_block *suite_list = NULL;
 
 /* Static function prototypes. */
 
-static void test_suite_close_handler(void *data);
-static osbool test_suite_redraw_line_handler(int line, struct window_line *content, void *data);
+static void suite_close_handler(void *data);
+static osbool suite_redraw_line_handler(int line, struct window_line *content, void *data);
 
-static void test_suite_load(struct test_suite_block *instance);
-static void test_suite_find_files(struct test_suite_block *instance, enum test_file_status type);
+static void suite_load(struct suite_block *instance);
+static void suite_find_files(struct suite_block *instance, enum file_instance_status type);
 
 /* The Test Suite window definiton. */
 
-static struct window_definition test_suite_window_definition = {
+static struct window_definition suite_window_definition = {
 	.type = WINDOW_TYPE_SUITE,
-	.callback_close = test_suite_close_handler,
-	.callback_redraw = test_suite_redraw_line_handler
+	.callback_close = suite_close_handler,
+	.callback_redraw = suite_redraw_line_handler
 };
 
 /**
@@ -154,13 +154,13 @@ static struct window_definition test_suite_window_definition = {
  * \return		TRUE if successful; FALSE on error.
  */
 
-osbool test_suite_create_instance(char *folder)
+osbool suite_create_instance(char *folder)
 {
-	struct test_suite_block *new = heap_alloc(sizeof(struct test_suite_block));
+	struct suite_block *new = heap_alloc(sizeof(struct suite_block));
 	if (new == NULL)
 		return FALSE;
 
-	new->test_files = NULL;
+	new->file_instances = NULL;
 	new->window = NULL;
 	new->textdump = NULL;
 	new->file_sets = NULL;
@@ -169,15 +169,15 @@ osbool test_suite_create_instance(char *folder)
 
 	new->textdump = textdump_create(TEXTDUMP_DEFAULT_ALLOCATION);
 	if (new->textdump == NULL) {
-		test_suite_delete_instance(new);
+		suite_delete_instance(new);
 		return FALSE;
 	}
 
 	/* Set up the window for the suite. */
 
-	new->window = window_create_instance(&test_suite_window_definition, new);
+	new->window = window_create_instance(&suite_window_definition, new);
 	if (new->window == NULL) {
-		test_suite_delete_instance(new);
+		suite_delete_instance(new);
 		return FALSE;
 	}
 
@@ -189,14 +189,14 @@ osbool test_suite_create_instance(char *folder)
 
 	if (new->suite_folder == TEXTDUMP_NULL || new->source_folder == TEXTDUMP_NULL ||
 			new->executable_folder == TEXTDUMP_NULL) {
-		test_suite_delete_instance(new);
+		suite_delete_instance(new);
 		return FALSE;
 	}
 
 	/* Link ourselves into the list of loaded test suites. */
 
-	new->next = test_suite_list;
-	test_suite_list = new;
+	new->next = suite_list;
+	suite_list = new;
 
 	/* Load the first file set from the folder. */
 
@@ -212,7 +212,7 @@ osbool test_suite_create_instance(char *folder)
  * \param *instance	Pointer to the instance to be deleted.
  */
 
-void test_suite_delete_instance(struct test_suite_block *instance)
+void suite_delete_instance(struct suite_block *instance)
 {
 	if (instance == NULL)
 		return;
@@ -231,7 +231,7 @@ void test_suite_delete_instance(struct test_suite_block *instance)
 
 	/* Unlink the instance from the list of suites. */
 
-	struct test_suite_block **list = &test_suite_list;
+	struct suite_block **list = &suite_list;
 
 	while (*list != NULL && *list != instance)
 		list = &((*list)->next);
@@ -244,7 +244,7 @@ void test_suite_delete_instance(struct test_suite_block *instance)
 	while (instance->file_sets != NULL)
 		instance->file_sets = file_set_delete_instance(instance->file_sets);
 
-//	test_file_delete_all(&(instance->test_files)); -- TODO -- Delete Me!!
+//	file_instance_delete_all(&(instance->file_instances)); -- TODO -- Delete Me!!
 
 	heap_free(instance);
 }
@@ -254,10 +254,10 @@ void test_suite_delete_instance(struct test_suite_block *instance)
  * associated with them.
  */
 
-void test_suite_delete_all(void)
+void suite_delete_all(void)
 {
-	while (test_suite_list != NULL)
-		test_suite_delete_instance(test_suite_list);
+	while (suite_list != NULL)
+		suite_delete_instance(suite_list);
 }
 
 /**
@@ -269,7 +269,7 @@ void test_suite_delete_all(void)
  * \return		The text dump offset, or TEXTDUMP_NULL.
  */
 
-unsigned test_suite_store_text(struct test_suite_block *instance, char *text)
+unsigned suite_store_text(struct suite_block *instance, char *text)
 {
 	if (instance == NULL)
 		return TEXTDUMP_NULL;
@@ -284,18 +284,18 @@ unsigned test_suite_store_text(struct test_suite_block *instance, char *text)
  *			pointer to an instance.
  */
 
-static void test_suite_close_handler(void *data)
+static void suite_close_handler(void *data)
 {
-	struct test_suite_block *instance = data;
+	struct suite_block *instance = data;
 	if (instance == NULL)
 		return;
 
-	test_suite_delete_instance(instance);
+	suite_delete_instance(instance);
 }
 
-static osbool test_suite_redraw_line_handler(int line, struct window_line *content, void *data)
+static osbool suite_redraw_line_handler(int line, struct window_line *content, void *data)
 {
-	struct test_suite_block *instance = data;
+	struct suite_block *instance = data;
 	if (instance == NULL)
 		return FALSE;
 
@@ -320,18 +320,18 @@ static osbool test_suite_redraw_line_handler(int line, struct window_line *conte
  * \param *instance	Pointer to the instance to load
  */
 
-static void test_suite_load(struct test_suite_block *instance) // TODO -- Delete Me!!!
+static void suite_load(struct suite_block *instance) // TODO -- Delete Me!!!
 {
 	if (instance == NULL)
 		return;
 
-	test_suite_find_files(instance, TEST_FILE_STATUS_SOURCE);
-	test_suite_find_files(instance, TEST_FILE_STATUS_ABSOLUTE);
+	suite_find_files(instance, FILE_INSTANCE_STATUS_SOURCE);
+	suite_find_files(instance, FILE_INSTANCE_STATUS_ABSOLUTE);
 
 	/* Run a test (TODO -- Remove this!) */
 
-	if (instance->test_files != NULL)
-		test_file_execute(instance->test_files);
+	if (instance->file_instances != NULL)
+		file_instance_execute(instance->file_instances);
 }
 
 /**
@@ -340,7 +340,7 @@ static void test_suite_load(struct test_suite_block *instance) // TODO -- Delete
  * \param
  */
 
-static void test_suite_find_files(struct test_suite_block *instance, enum test_file_status type)
+static void suite_find_files(struct suite_block *instance, enum file_instance_status type)
 {
 	if (instance == NULL)
 		return;
@@ -356,14 +356,14 @@ static void test_suite_find_files(struct test_suite_block *instance, enum test_f
 
 	/* Configure for the target file. */
 
-	char folder[TEST_SUITE_MAX_PATH_LEN];
+	char folder[SUITE_MAX_PATH_LEN];
 	char *pattern = NULL;
 	char *suffix = NULL;
 	unsigned filetype = 0x0u;
 
 	switch (type) {
-	case TEST_FILE_STATUS_SOURCE:
-		string_printf(folder, TEST_SUITE_MAX_PATH_LEN, "%s.%s",
+	case FILE_INSTANCE_STATUS_SOURCE:
+		string_printf(folder, SUITE_MAX_PATH_LEN, "%s.%s",
 				textdump_base + instance->suite_folder,
 				textdump_base + instance->source_folder
 		);
@@ -372,8 +372,8 @@ static void test_suite_find_files(struct test_suite_block *instance, enum test_f
 		filetype = osfile_TYPE_TEXT;
 		break;
 
-	case TEST_FILE_STATUS_ABSOLUTE:
-		string_printf(folder, TEST_SUITE_MAX_PATH_LEN, "%s.%s",
+	case FILE_INSTANCE_STATUS_ABSOLUTE:
+		string_printf(folder, SUITE_MAX_PATH_LEN, "%s.%s",
 				textdump_base + instance->suite_folder,
 				textdump_base + instance->executable_folder
 		);
@@ -387,7 +387,7 @@ static void test_suite_find_files(struct test_suite_block *instance, enum test_f
 	/* Read the files in the folder, and process any which match. */
 
 	byte buffer[1024];
-	char filename[TEST_SUITE_MAX_PATH_LEN];
+	char filename[SUITE_MAX_PATH_LEN];
 	int count = 0, context = 0;
 	os_error *error = NULL;
 
@@ -418,7 +418,7 @@ static void test_suite_find_files(struct test_suite_block *instance, enum test_f
 
 				/* Assemble the full pathname of the file. */
 
-				string_printf(filename, TEST_SUITE_MAX_PATH_LEN, "%s.%s", folder, entry->name);
+				string_printf(filename, SUITE_MAX_PATH_LEN, "%s.%s", folder, entry->name);
 
 				/* If there's a suffix to the name, remove it. */
 
@@ -430,7 +430,7 @@ static void test_suite_find_files(struct test_suite_block *instance, enum test_f
 						*(entry->name + name_length - suffix_length) = '\0';
 				}
 
-				test_file_include_entry(&(instance->test_files), type, entry->name, filename);
+				file_instance_include_entry(&(instance->file_instances), type, entry->name, filename);
 			}
 
 
