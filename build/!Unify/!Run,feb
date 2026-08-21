@@ -28,7 +28,7 @@ Set Unify$Dir <Obey$Dir>
 
 | Set the application sprites.
 
-|IconSprites <Unify$Dir>.!Sprites
+IconSprites <Unify$Dir>.!Sprites
 
 | Ensure the Nested Wimp is installed.
 
