@@ -24,4 +24,4 @@
 
 If "<Unify$Dir>"="" Then Set Unify$Dir <Obey$Dir>
 
-|IconSprites <Unify$Dir>.!Sprites
+IconSprites <Unify$Dir>.!Sprites

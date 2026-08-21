@@ -47,6 +47,7 @@
 #include "sflib/icons.h"
 #include "sflib/ihelp.h"
 #include "sflib/msgs.h"
+#include "sflib/string.h"
 #include "sflib/templates.h"
 #include "sflib/url.h"
 
@@ -125,7 +126,7 @@ void iconbar_initialise(void)
 	icon_bar.icon.extent.y0 = 0;
 	icon_bar.icon.extent.y1 = 69;
 	icon_bar.icon.flags = wimp_ICON_SPRITE | (wimp_BUTTON_CLICK << wimp_ICON_BUTTON_TYPE_SHIFT);
-	msgs_lookup("TaskSpr", icon_bar.icon.data.sprite, osspriteop_NAME_LIMIT);
+	string_copy(icon_bar.icon.data.sprite, "!unify", osspriteop_NAME_LIMIT);
 	wimp_create_icon(&icon_bar);
 
 	event_add_window_mouse_event(wimp_ICON_BAR, iconbar_click_handler);
