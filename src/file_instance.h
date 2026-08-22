@@ -30,8 +30,6 @@
 #ifndef UNIFY_FILE_INSTANCE
 #define UNIFY_FILE_INSTANCE
 
-#include "suite.h"
-
 enum file_instance_status {
 	FILE_INSTANCE_STATUS_NONE = 0,
 	FILE_INSTANCE_STATUS_SOURCE = 1,	/**< The test file has source.		*/
@@ -39,6 +37,9 @@ enum file_instance_status {
 };
 
 struct file_instance_block;
+
+#include "suite.h"
+#include "file_set.h"
 
 /**
  * Initialise the Test File code.
@@ -50,11 +51,12 @@ void file_instance_initialise(void);
  * Create a new file instance and link it to the supplied parent suite.
  *
  * \param *parent	Pointer to the parent suite.
+ * \param *initial	Pointer to the file set which created the instance.
  * \param *name		Pointer to the name of the file.
  * \return		TRUE if successful; FALSE on error.
  */
 
-struct file_instance_block *file_instance_create_instance(struct suite_block *parent, char *name);
+struct file_instance_block *file_instance_create_instance(struct suite_block *parent, struct file_set_block *initial, char *name);
 
 /**
  * Delete a Test File instance.

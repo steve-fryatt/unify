@@ -310,7 +310,7 @@ static void file_set_find_objects(struct file_set_block *instance, enum file_ins
 				// TODO Find object (in previous and current).
 				// If not found,
 
-				struct file_instance_block *file = file_instance_create_instance(instance->parent, entry->name);
+				struct file_instance_block *file = file_instance_create_instance(instance->parent, instance, entry->name);
 
 				// Merge flags as required.
 				// If required, add in as an object.

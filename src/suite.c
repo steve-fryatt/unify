@@ -187,6 +187,9 @@ osbool suite_create_instance(char *folder)
 
 	new->file_sets = file_set_create_instance(new, new->file_sets);
 
+	int objects = file_set_get_object_count(new->file_sets);
+	window_set_extent(new->window, objects);
+
 	return TRUE;
 }
 
@@ -346,6 +349,9 @@ static osbool suite_redraw_line_handler(int line, struct window_line *content, v
 
 	content->text = textdump_base + text;
 	content->status = WINDOW_STATUS_FAIL;
+
+	content->count = 0;
+	content->total = 100;
 
 	return TRUE;
 }

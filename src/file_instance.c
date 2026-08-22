@@ -52,6 +52,7 @@
 
 #include "file_instance.h"
 
+#include "file_set.h"
 #include "main.h"
 #include "suite.h"
 #include "textdump.h"
@@ -69,6 +70,11 @@ struct file_instance_block {
 	 * Pointer to the parent test suite.
 	 */
 	struct suite_block *parent;
+
+	/**
+	 * Pointer to the file set where this instance orifginated.
+	 */
+	struct file_set_block *initial;
 
 	/**
 	 * Pointer to the next file in the suite, or NULL.
@@ -116,13 +122,14 @@ void file_instance_initialise(void)
  * Create a new file instance and link it to the supplied parent suite.
  *
  * \param *parent	Pointer to the parent suite.
+ * \param *initial	Pointer to the file set which created the instance.
  * \param *name		Pointer to the name of the file.
  * \return		TRUE if successful; FALSE on error.
  */
 
-struct file_instance_block *file_instance_create_instance(struct suite_block *parent, char *name)
+struct file_instance_block *file_instance_create_instance(struct suite_block *parent, struct file_set_block *initial, char *name)
 {
-	if (parent == NULL || name == NULL)
+	if (parent == NULL || initial == NULL || name == NULL)
 		return NULL;
 
 	struct file_instance_block *new = heap_alloc(sizeof(struct file_instance_block));
@@ -130,6 +137,7 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
 		return NULL;
 
 	new->parent = parent;
+	new->initial = initial;
 	new->status = FILE_INSTANCE_STATUS_NONE;
 	*new->source_file = '\0';
 	*new->absolute_file = '\0';

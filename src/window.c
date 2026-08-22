@@ -67,7 +67,19 @@
  * The minimum number of lines to show in a window.
  */
 
-#define WINDOW_MINIMUM_SIZE 10
+#define WINDOW_MINIMUM_SIZE 6
+
+/**
+ * The minimum width of a window content, in OS units.
+ */
+
+#define WINDOW_MINIMUM_CONTENT_WIDTH 400
+
+/**
+ * The size of the buffer used for plotting the detail icon contents.
+ */
+
+#define WINDOW_DETAIL_BUFFER_LEN 16
 
 /**
  * The icon templates.
@@ -83,15 +95,15 @@
  */
 
 struct window_instance {
-	struct window_definition *definition;	/**< The window defintion.		*/
-	void *client_data;			/**< The client data pointer.		*/
+	struct window_definition *definition;	/**< The window defintion.			*/
+	void *client_data;			/**< The client data pointer.			*/
 
-	wimp_w handle;		/**< The Wimp handle of the window.			*/
-	wimp_w pane_handle;	/**< The Wimp handle of the pane.			*/
-	int pane_size;		/**< The height of a toolbar pane, in OS units.		*/
-	int width;		/**< The window width in OS units.			*/
+	wimp_w handle;				/**< The Wimp handle of the window.		*/
+	wimp_w pane_handle;			/**< The Wimp handle of the pane.		*/
+	int pane_size;				/**< The height of a toolbar pane, in OS units.	*/
+	int width;				/**< The window width in OS units.		*/
 
-	int entries;				/**< The number of items in the window.	*/
+	int entries;				/**< The number of items in the window.		*/
 };
 
 /* Global variables. */
@@ -122,9 +134,11 @@ static font_f window_bold_font = font_SYSTEM;
 
 /* Static function prototypes. */
 
+static void window_open_handler(wimp_open *open);
 static void window_close_handler(wimp_close *close);
 static void window_redraw_handler(wimp_draw *redraw);
 static void window_scroll_handler(wimp_scroll *scroll);
+static osbool window_recalculate_columns(struct window_instance *instance, wimp_open *open);
 
 //static void window_format_numeric_data(struct window_redraw *value, char *buffer, size_t length);
 //static os_error *window_find_fonts(void);
@@ -171,7 +185,7 @@ struct window_instance *window_create_instance(struct window_definition *definit
 	instance->pane_handle = NULL;
 	instance->width = 1200;
 	instance->pane_size = 0;
-	instance->entries = 4;
+	instance->entries = 0;
 
 	/* Create the new window. */
 
@@ -196,11 +210,21 @@ struct window_instance *window_create_instance(struct window_definition *definit
 	}
 
 	event_add_window_user_data(instance->handle, instance);
+	event_add_window_open_event(instance->handle, window_open_handler);
 	event_add_window_close_event(instance->handle, window_close_handler);
 	event_add_window_redraw_event(instance->handle, window_redraw_handler);
 	event_add_window_scroll_event(instance->handle, window_scroll_handler);
 
-	windows_open(instance->handle);
+	/* Open the windows. */
+
+	wimp_window_state window;
+
+	window.w = instance->handle;
+	wimp_get_window_state(&window);
+	window_recalculate_columns(instance, (wimp_open *) &window);
+	window.next = wimp_TOP;
+	wimp_open_window((wimp_open *) &window);
+
 	windows_open_nested_as_toolbar(instance->pane_handle, instance->handle, instance->pane_size, FALSE);
 
 	return instance;
@@ -232,6 +256,24 @@ void window_delete_instance(struct window_instance *instance)
 }
 
 /**
+ * Handle Open events on an instance window.
+ *
+ * \param *open			The Wimp Open data block.
+ */
+
+static void window_open_handler(wimp_open *open)
+{
+	struct window_instance *instance = event_get_window_user_data(open->w);
+	if (instance == NULL)
+		return;
+
+	if (window_recalculate_columns(instance, open))
+		windows_redraw(open->w);
+
+	wimp_open_window(open);
+}
+
+/**
  * Handle Close events on an instance window.
  *
  * \param *close		The Wimp Close data block.
@@ -245,11 +287,30 @@ static void window_close_handler(wimp_close *close)
 		instance->definition->callback_close(instance->client_data);
 }
 
-
+/**
+ * Handle Redraw events on an instance window.
+ *
+ * \param *redraw		The Wimp Redraw data block.
+ */
 
 static void window_redraw_handler(wimp_draw *redraw)
 {
 	struct window_instance *instance = event_get_window_user_data(redraw->w);
+
+	wimp_icon *name_icon = window_definition->icons + WINDOW_TEMPLATE_ICON_NAME;
+	wimp_icon *detail_icon = window_definition->icons + WINDOW_TEMPLATE_ICON_DETAIL;
+
+	int detail_column_width = detail_icon->extent.x1 - detail_icon->extent.x0;
+
+	char detail_buffer[WINDOW_DETAIL_BUFFER_LEN];
+
+	detail_icon->extent.x1 = instance->width - WINDOW_ROW_GUTTER;
+	detail_icon->extent.x0 = detail_icon->extent.x1 - detail_column_width;
+	detail_icon->data.indirected_text.text = detail_buffer;
+	detail_icon->data.indirected_text.size = WINDOW_DETAIL_BUFFER_LEN;
+
+	name_icon->extent.x0 = WINDOW_ROW_GUTTER;
+	name_icon->extent.x1 = detail_icon->extent.x0 - WINDOW_ROW_GUTTER;
 
 	/* Perform the redraw. */
 
@@ -268,10 +329,8 @@ static void window_redraw_handler(wimp_draw *redraw)
 
 			int base = ((oy - redraw->clip.y0) - instance->pane_size) / WINDOW_ROW_HEIGHT;
 	//		int base = WINDOW_REDRAW_BASE(instance->pane_size, oy - redraw->clip.y0);
-	//		if (base > instance->entries)
-	//			base = instance->entries;
-
-			wimp_icon *name_icon = window_definition->icons + WINDOW_TEMPLATE_ICON_NAME;
+			if (base > instance->entries)
+				base = instance->entries;
 
 			for (int y = top; y <= base; y++) {
 				if (instance->definition->callback_redraw == NULL)
@@ -282,8 +341,11 @@ static void window_redraw_handler(wimp_draw *redraw)
 				if (instance->definition->callback_redraw(y, &content, instance->client_data) == FALSE)
 					break;
 
-				name_icon->extent.y1 = -((y * WINDOW_ROW_HEIGHT) + WINDOW_ROW_GUTTER + instance->pane_size);
-				name_icon->extent.y0 = window_definition->icons[0].extent.y1 - WINDOW_ROW_ICON_HEIGHT;
+				detail_icon->extent.y1 = -((y * WINDOW_ROW_HEIGHT) + WINDOW_ROW_GUTTER + instance->pane_size);
+				detail_icon->extent.y0 = detail_icon->extent.y1 - WINDOW_ROW_ICON_HEIGHT;
+
+				name_icon->extent.y1 = detail_icon->extent.y1;
+				name_icon->extent.y0 = detail_icon->extent.y0;
 
 	//			window_definition->icons[0].extent.y0 = WINDOW_ROW_Y0(instance->pane_size, y);
 	//			window_definition->icons[0].extent.y1 = WINDOW_ROW_Y1(instance->pane_size, y);
@@ -304,7 +366,10 @@ static void window_redraw_handler(wimp_draw *redraw)
 					break;
 				}
 
+				string_printf(detail_buffer, WINDOW_DETAIL_BUFFER_LEN, "%d/%d", content.count, content.total);
+
 				wimp_plot_icon(name_icon);
+				wimp_plot_icon(detail_icon);
 			}
 		}
 
@@ -328,11 +393,9 @@ static void window_scroll_handler(wimp_scroll *scroll)
 	if (instance == NULL || instance->handle == NULL)
 		return;
 
-	int	width, height, error;
-
 	/* Add in the X scroll offset. */
 
-	width = scroll->visible.x1 - scroll->visible.x0;
+	int width = scroll->visible.x1 - scroll->visible.x0;
 
 	switch (scroll->xmin) {
 	case wimp_SCROLL_COLUMN_LEFT:
@@ -366,7 +429,8 @@ static void window_scroll_handler(wimp_scroll *scroll)
 
 	/* Add in the Y scroll offset. */
 
-	height = (scroll->visible.y1 - scroll->visible.y0) - instance->pane_size;
+	int height = (scroll->visible.y1 - scroll->visible.y0) - instance->pane_size;
+	int error = 0;
 
 	switch (scroll->ymin) {
 	case wimp_SCROLL_LINE_UP:
@@ -415,59 +479,93 @@ static void window_scroll_handler(wimp_scroll *scroll)
 }
 
 
-
-
-#if 0
 /**
- * Return the Wimp window handle for the window used by a
- * text window instance.
+ * Recalculate the columns of an instance window.
  *
- * \param *instance		The instance to be queried.
- * \return			The window handle.
+ * \param *instance		The instance to be recalculated.
+ * \param *open			The Wimp Open data block.
+ * \return			TRUE if the window will need to be redrawn.
  */
 
-wimp_w window_get_handle(struct window_instance *instance)
+static osbool window_recalculate_columns(struct window_instance *instance, wimp_open *open)
 {
-	if (instance == NULL)
-		return NULL;
+	if (instance == NULL || open == NULL)
+		return FALSE;
 
-	return instance->handle;
+	int new_width = open->visible.x1 - open->visible.x0;
+
+	if (new_width < WINDOW_MINIMUM_CONTENT_WIDTH)
+		new_width = WINDOW_MINIMUM_CONTENT_WIDTH;
+
+	if (new_width == instance->width)
+		return FALSE;
+
+	instance->width = new_width;
+
+	return TRUE;
 }
 
-
 /**
- * Return the Wimp window handle for the pane used by a
- * text window instance.
+ * Set the size of an in an instance window in terms of the number of entries
+ * that it contains.
  *
- * \param *instance		The instance to be queried.
- * \return			The pane handle.
- */
+ * \param *instance		The instance to update.
+ * \param entries		The number of entries to show in the window.
+ * */
 
-wimp_w window_get_pane_handle(struct window_instance *instance)
-{
-	if (instance == NULL)
-		return NULL;
-
-	return instance->pane_handle;
-}
-
-
-/**
- * Open a text window instance.
- *
- * \param *instance		The instance to be opened.
- */
-
-void window_open(struct window_instance *instance)
+void window_set_extent(struct window_instance *instance, int entries)
 {
 	if (instance == NULL || instance->handle == NULL)
 		return;
 
-	windows_open(instance->handle);
+	/* The new vertical extent. */
 
-	if (instance->pane_handle != NULL)
-		windows_open_nested_as_toolbar(instance->pane_handle, instance->handle, instance->pane_size, FALSE);
+	if (entries < WINDOW_MINIMUM_SIZE)
+		entries = WINDOW_MINIMUM_SIZE;
+
+	int new_extent = -((WINDOW_ROW_HEIGHT * entries) + instance->pane_size + WINDOW_ROW_GUTTER);
+
+	/* Get the current window details, and find the extent of the bottom of the visible area. */
+
+	wimp_window_state state;
+
+	state.w = instance->handle;
+	wimp_get_window_state(&state);
+
+	int visible_extent = state.yscroll + (state.visible.y0 - state.visible.y1);
+
+	/* If the visible area falls outside the new window extent, then the window needs to be re-opened first. */
+
+	if (new_extent > visible_extent) {
+		int new_scroll = new_extent - (state.visible.y0 - state.visible.y1);
+
+		if (new_scroll > 0) {
+			state.visible.y0 += new_scroll;
+			state.yscroll = 0;
+		} else {
+			state.yscroll = new_scroll;
+		}
+
+		wimp_open_window((wimp_open *) &state);
+	}
+
+	/* Call Wimp_SetExtent to update the extent, safe in the knowledge that the visible area will still exist. */
+
+	os_box extent;
+
+	extent.x0 = window_definition->extent.x0;
+	extent.x1 = window_definition->extent.x1;
+	extent.y0 = new_extent;
+	extent.y1 = window_definition->extent.y1;
+
+	wimp_set_extent(instance->handle, &extent);
+
+	instance->entries = entries;
 }
+
+
+
+#if 0
 
 
 
@@ -542,60 +640,6 @@ void window_redraw(struct window_instance *instance, wimp_draw *redraw, osbool (
 }
 
 
-/**
- * Set the extent of a text block window.
- *
- * \param *instance		The instance to update.
- * \param lines			The number of lines to include.
- * */
-
-void window_set_extent(struct window_instance *instance, int lines)
-{
-	wimp_window_state	state;
-	os_box			extent;
-	int			visible_extent, new_extent, new_scroll;
-
-	if (instance == NULL || instance->handle == NULL)
-		return;
-
-	/* The new vertical extent. */
-
-	if (lines < WINDOW_MINIMUM_SIZE)
-		lines = WINDOW_MINIMUM_SIZE;
-
-	new_extent = (-WINDOW_ROW_HEIGHT * lines) - instance->pane_size;
-
-	/* Get the current window details, and find the extent of the bottom of the visible area. */
-
-	state.w = instance->handle;
-	wimp_get_window_state(&state);
-
-	visible_extent = state.yscroll + (state.visible.y0 - state.visible.y1);
-
-	/* If the visible area falls outside the new window extent, then the window needs to be re-opened first. */
-
-	if (new_extent > visible_extent) {
-		new_scroll = new_extent - (state.visible.y0 - state.visible.y1);
-
-		if (new_scroll > 0) {
-			state.visible.y0 += new_scroll;
-			state.yscroll = 0;
-		} else {
-			state.yscroll = new_scroll;
-		}
-
-		wimp_open_window((wimp_open *) &state);
-	}
-
-	/* Call Wimp_SetExtent to update the extent, safe in the knowledge that the visible area will still exist. */
-
-	extent.x0 = 0;
-	extent.x1 = instance->width;
-	extent.y0 = new_extent;
-	extent.y1 = 0;
-
-	wimp_set_extent(instance->handle, &extent);
-}
 
 
 /**

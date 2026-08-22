@@ -33,6 +33,8 @@
 #ifndef UNIFY_FILE_SET
 #define UNIFY_FILE_SET
 
+struct file_set_block;
+
 #include "suite.h"
 
 /**

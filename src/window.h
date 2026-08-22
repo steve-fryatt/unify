@@ -208,66 +208,15 @@ struct window_instance *window_create_instance(struct window_definition *definit
  */
 
 void window_delete_instance(struct window_instance *instance);
-#if 0
-/**
- * Return the Wimp window handle for the window used by a
- * text window instance.
- *
- * \param *instance		The instance to be queried.
- * \return			The window handle.
- */
-
-wimp_w window_get_handle(struct window_instance *instance);
 
 /**
- * Return the Wimp window handle for the pane used by a
- * text window instance.
- *
- * \param *instance		The instance to be queried.
- * \return			The pane handle.
- */
-
-wimp_w window_get_pane_handle(struct window_instance *instance);
-
-/**
- * Open a text window instance.
- *
- * \param *instance		The instance to be opened.
- */
-
-void window_open(struct window_instance *instance);
-
-/**
- * Process data from a scroll event for a text window instance, updating
- * the window position in the associated data block as required and reopening
- * the window in the correct place.
- *
- * \param *instance		The instance to be scrolled.
- * \param *scroll		The scroll event data to be processed.
- */
-
-void window_process_scroll_event(struct window_instance *instance, wimp_scroll *scroll);
-
-
-/**
- * Process data for redraw events on a text window instance.
- *
- * \param instance		The text window instance to be redrawn.
- * \param *redraw		Pointer to the redraw data block.
- * \param *plotter		Pointer to a line plotter function.
- * \param *data			A data pointer to be passed to the plotter.
- */
-
-void window_redraw(struct window_instance *instance, wimp_draw *redraw, osbool (*plotter)(int, struct window_redraw *, void *), void *data);
-
-
-/**
- * Set the extent of a text block window.
+ * Set the size of an in an instance window in terms of the number of entries
+ * that it contains.
  *
  * \param *instance		The instance to update.
- * \param lines			The number of lines to include.
+ * \param entries		The number of entries to show in the window.
  * */
 
-void window_set_extent(struct window_instance *instance, int lines);
-#endif
+void window_set_extent(struct window_instance *instance, int entries);
+
 #endif
