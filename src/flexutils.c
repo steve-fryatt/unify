@@ -30,6 +30,7 @@
 /* ANSII Header Files. */
 
 #include <stdlib.h>
+#include <stddef.h>
 
 /* Acorn C Header files. */
 

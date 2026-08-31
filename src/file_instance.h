@@ -30,11 +30,35 @@
 #ifndef UNIFY_FILE_INSTANCE
 #define UNIFY_FILE_INSTANCE
 
+#include "oslib/osgbpb.h"
+
+/**
+ * The status of a file instance.
+ */
+
 enum file_instance_status {
-	FILE_INSTANCE_STATUS_NONE = 0,
-	FILE_INSTANCE_STATUS_SOURCE = 1,	/**< The test file has source.		*/
-	FILE_INSTANCE_STATUS_ABSOLUTE = 2	/**< The test file has an executable.	*/
+	FILE_INSTANCE_STATUS_UNKNOWN,
+	FILE_INSTANCE_STATUS_READY_TO_RUN,		/**< Files OK, ready to run tests.		*/
+	FILE_INSTANCE_STATUS_PASS,
+	FILE_INSTANCE_STATUS_FAIL,
+	FILE_INSTANCE_STATUS_ERROR_NO_FILES,		/**< Neither source nor executable found.	*/
+	FILE_INSTANCE_STATUS_ERROR_NO_SOURCE,		/**< Source file is missing, only executable.	*/
+	FILE_INSTANCE_STATUS_ERROR_NO_EXECUTABLE,	/**< Executable file is missing, only source.	*/
+	FILE_INSTANCE_STATUS_ERROR_BAD_FILES		/**< Can't work out the file state.		*/
 };
+
+/**
+ * Line redraw details for a file instance.
+ */
+
+struct file_instance_line_details {
+	unsigned name;
+	enum file_instance_status status;
+};
+
+/**
+ * A file instance.
+ */
 
 struct file_instance_block;
 
@@ -73,9 +97,39 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
 
 struct file_instance_block *file_instance_delete_instance(struct file_instance_block *instance);
 
-unsigned file_instance_get_name(struct file_instance_block *instance);
+/**
+ * Return the details for required for redrawing a display line of a Test File
+ * instance.
+ *
+ * \param *instance	Pointer to the instance of interest.
+ * \param *details	Pointer to a struct in which the details should be
+ *			returned.
+ * \return		TRUE if valid details were returned; else FALSE.
+ */
 
-//void file_instance_include_entry(struct file_instance_block **list, enum file_instance_status type, char* name, char *filename);
+osbool file_instance_get_line_details(struct file_instance_block *instance, struct file_instance_line_details *details);
+
+/**
+ * Compare the details of an object found on disc with those stored in a
+ * file instance.
+ *
+ * \param *instance	Pointer to the instance to be checked.
+ * \param *clean_name	Pointer to a string containing the base name of the
+ *			object with any suffix removed.
+ * \param *entry	Pointer to the data for the object returned from OS_GBPB.
+ * \return		TRUE if the object matches; else FALSE.
+ */
+
+osbool file_instance_compare_object(struct  file_instance_block *instance, char *clean_name, osgbpb_info *entry);
+
+
+
+
+void file_instance_add_source_file(struct file_instance_block *instance, osgbpb_info *entry);
+void file_instance_add_executable_file(struct file_instance_block *instance, osgbpb_info *entry);
+
+void file_instance_validate_files(struct file_instance_block *instance);
+
 
 osbool file_instance_execute(struct file_instance_block *instance);
 

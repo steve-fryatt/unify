@@ -30,6 +30,8 @@
 /* ANSI C header files */
 
 #include <string.h>
+#include <stddef.h>
+#include <stdint.h>
 
 /* Acorn C header files */
 
@@ -38,6 +40,8 @@
 #include "oslib/os.h"
 #include "oslib/osfile.h"
 #include "oslib/osgbpb.h"
+#include "oslib/osword.h"
+#include "oslib/territory.h"
 #include "oslib/wimp.h"
 
 /* SF-Lib header files. */
@@ -69,6 +73,28 @@
 
 #define FILE_SET_MAX_PATH_LEN 256
 
+/**
+ * OS_GBPB Buffer size.
+ */
+
+#define FILE_SET_OS_GBPB_BUFFER_SIZE 1024
+
+/**
+ * The maximum number of objects to read on a call to OS_GBPB.
+ */
+
+#define FILE_SET_OS_GBPB_MAX_READ 100
+
+/**
+ * The types of file which exist in a set.
+ */
+
+enum file_set_type {
+	FILE_SET_TYPE_UNKNOWN,
+	FILE_SET_TYPE_SOURCE,
+	FILE_SET_TYPE_EXECUTABLE
+};
+
 /* Structure definitions. */
 
 /**
@@ -90,6 +116,12 @@ struct file_set_block {
 	struct file_set_block *previous;
 
 	/**
+	 * The timestamp when the file set was created.
+	 */
+
+	uint64_t timestamp;
+
+	/**
 	 * Flex block pointer to the list of objects in the file set.
 	 */
 	struct file_instance_block **objects;
@@ -104,7 +136,11 @@ struct file_set_block {
 /* Static function prototypes. */
 
 static osbool file_set_add_object(struct file_set_block *instance, struct file_instance_block *object);
-static void file_set_find_objects(struct file_set_block *instance, enum file_instance_status type);
+static void file_set_find_objects(struct file_set_block *instance, enum file_set_type type);
+static struct file_instance_block *file_set_find_object(struct file_set_block *instance, char *clean_name, osgbpb_info *entry);
+
+static void file_set_convert_time(uint64_t time, char *buffer, size_t length); // TODO -- Move into its own file.
+
 
 /**
  * Create a new file set instance, by scanning the parent suite and creating a
@@ -118,6 +154,15 @@ static void file_set_find_objects(struct file_set_block *instance, enum file_ins
 
 struct file_set_block *file_set_create_instance(struct suite_block *parent, struct file_set_block *previous)
 {
+	oswordreadclock_utc_block utc = { .op = oswordreadclock_OP_UTC };
+	os_error *error = xoswordreadclock_utc(&utc);
+	if (error != NULL) {
+		error_report_os_error(error, wimp_ERROR_BOX_CANCEL_ICON);
+		return NULL;
+	}
+
+	/* Allocate the instance memory and fill the data. */
+
 	struct file_set_block *new = heap_alloc(sizeof(struct file_set_block));
 	if (new == NULL)
 		return NULL;
@@ -125,6 +170,7 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 	new->objects = NULL;
 	new->object_space = FILE_SET_ALLOCATION_UNIT;
 	new->object_count = 0;
+	new->timestamp = ((uint64_t) utc.utc[0] << 0) | ((uint64_t) utc.utc[1] << 8) | ((uint64_t) utc.utc[2] << 16) | ((uint64_t) utc.utc[3] << 24) | ((uint64_t) utc.utc[4] << 32);
 
 	if (!flexutils_allocate((void **) &(new->objects), sizeof(struct file_instance_block *), new->object_space)) {
 		heap_free(new);
@@ -134,16 +180,42 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 	new->parent = parent;
 	new->previous = previous;
 
-	debug_printf("Creating new file set 0x%x in suite 0x%x...", new, parent);
+	debug_printf("\\KCreating new file set 0x%x in suite 0x%x...", new, parent);
 
-	/* Find the files. */
+	/* Find the files, first searching for sources and then executables. */
 
-	file_set_find_objects(new, FILE_INSTANCE_STATUS_SOURCE);
-	file_set_find_objects(new, FILE_INSTANCE_STATUS_ABSOLUTE);
+	file_set_find_objects(new, FILE_SET_TYPE_SOURCE);
+	file_set_find_objects(new, FILE_SET_TYPE_EXECUTABLE);
 
-	debug_printf("New file set done!");
+	debug_printf("\\kNew file set done!");
+	char timebuf[128];
+	file_set_convert_time(new->timestamp, timebuf, 128);
+
+	debug_printf("File set created at %s", timebuf);
+
+	/* Do some initial validation on the files that we found. */
+
+	for (int i = 0; i < new->object_count; i++)
+		file_instance_validate_files(new->objects[i]);
 
 	return new;
+}
+
+
+static void file_set_convert_time(uint64_t time, char *buffer, size_t length) // TODO -- Move into its own file.
+{
+	if (buffer == NULL || length == 0)
+		return;
+
+	os_date_and_time os;
+
+	os[0] = (time >> 0) && 0xffu;
+	os[1] = (time >> 8) && 0xffu;
+	os[2] = (time >> 16) && 0xffu;
+	os[3] = (time >> 24) && 0xffu;
+	os[4] = (time >> 32) && 0xffu;
+
+	territory_convert_standard_date_and_time(territory_CURRENT, (const os_date_and_time *) &os, buffer, length);
 }
 
 /**
@@ -175,6 +247,15 @@ struct file_set_block *file_set_delete_instance(struct file_set_block *instance)
 	return previous;
 }
 
+/**
+ * Add a file instance to the list of instances owned by a file set.
+ *
+ * \param *instance		Pointer to the file set instance to take
+ *				the object.
+ * \param *object		Pointer to the object to be added.
+ * \return			TRUE if successful; else FALSE.
+ */
+
 static osbool file_set_add_object(struct file_set_block *instance, struct file_instance_block *object)
 {
 	if (instance == NULL)
@@ -198,6 +279,13 @@ static osbool file_set_add_object(struct file_set_block *instance, struct file_i
 	return TRUE;
 }
 
+/**
+ * Return the number of objects within a file set.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \return			The number of objects in the instance.
+ */
+
 size_t file_set_get_object_count(struct file_set_block *instance)
 {
 	if (instance == NULL)
@@ -206,27 +294,39 @@ size_t file_set_get_object_count(struct file_set_block *instance)
 	return instance->object_count;
 }
 
-unsigned file_set_get_object_name(struct file_set_block *instance, int i)
+/**
+ * Return the details of a file instance required for redraw, for a specific
+ * line from within the file set.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \param line			The line number from which to retiurn details.
+ * \param *details		Pointer to a structure in memory to hold the
+ *				returned details.
+ */
+
+osbool file_set_get_object_line_details(struct file_set_block *instance, int line, struct file_instance_line_details *details)
 {
-	if (instance == NULL || instance->objects == NULL || i < 0 || i >= instance->object_count)
-		return TEXTDUMP_NULL;
+	if (instance == NULL || instance->objects == NULL)
+		return FALSE;
 
-	return file_instance_get_name(instance->objects[i]);
+	if (line < 0 || line >= instance->object_count)
+		return FALSE;
+
+	return file_instance_get_line_details(instance->objects[line], details);
 }
-
-
-
-
-
-
 
 /**
  * Find a collection of files within a folder.
  *
- * \param
+ * NB: There is an expectation that this routine will be called in a specific
+ * sequence of FILE_SET_TYPE_SOURCE folled by FILE_SET_TYPE_EXECUTABLE. If this
+ * is not done, the results will be undefined.
+ *
+ * \param *instance		Pointer to the file set instance to be populated.
+ * \param type			The type of file to be searched for.
  */
 
-static void file_set_find_objects(struct file_set_block *instance, enum file_instance_status type)
+static void file_set_find_objects(struct file_set_block *instance, enum file_set_type type)
 {
 	if (instance == NULL)
 		return;
@@ -239,14 +339,14 @@ static void file_set_find_objects(struct file_set_block *instance, enum file_ins
 	unsigned filetype = 0x0u;
 
 	switch (type) {
-	case FILE_INSTANCE_STATUS_SOURCE:
+	case FILE_SET_TYPE_SOURCE:
 		suite_read_folder_path(instance->parent, folder, FILE_SET_MAX_PATH_LEN, SUITE_FOLDER_SOURCE);
 		pattern = "*/c";
 		suffix = "/c";
 		filetype = osfile_TYPE_TEXT;
 		break;
 
-	case FILE_INSTANCE_STATUS_ABSOLUTE:
+	case FILE_SET_TYPE_EXECUTABLE:
 		suite_read_folder_path(instance->parent, folder, FILE_SET_MAX_PATH_LEN, SUITE_FOLDER_EXECUTABLE);
 		filetype = osfile_TYPE_ABSOLUTE;
 		break;
@@ -255,17 +355,28 @@ static void file_set_find_objects(struct file_set_block *instance, enum file_ins
 		return;
 	}
 
-	debug_printf("Scanning folder: %s", folder);
+	debug_printf("\\CScanning folder: %s", folder);
 
 	/* Read the files in the folder, and process any which match. */
 
-	byte buffer[1024];
-	char filename[FILE_SET_MAX_PATH_LEN];
+	byte buffer[FILE_SET_OS_GBPB_BUFFER_SIZE];
 	int count = 0, context = 0;
 	os_error *error = NULL;
 
+	char *clean_name = NULL;
+	char clean_name_buffer[FILE_SET_MAX_PATH_LEN];
+
 	do {
-		error = xosgbpb_dir_entries_info(folder, (osgbpb_info_list *) buffer, 100, context, 1024, pattern, &count, &context);
+		error = xosgbpb_dir_entries_info(
+				folder,
+				(osgbpb_info_list *) buffer,
+				FILE_SET_OS_GBPB_MAX_READ,
+				context,
+				FILE_SET_OS_GBPB_BUFFER_SIZE,
+				pattern,
+				&count,
+				&context
+		);
 
 		if (error == NULL && count > 0) {
 			byte *buffer_offset = buffer;
@@ -289,47 +400,92 @@ static void file_set_find_objects(struct file_set_block *instance, enum file_ins
 				if (((entry->load_addr & osfile_FILE_TYPE) >> osfile_FILE_TYPE_SHIFT) != filetype)
 					continue;
 
-				/* Assemble the full pathname of the file. */
+				/* Start by assuming that the name is clean as it is. */
 
-				string_printf(filename, FILE_SET_MAX_PATH_LEN, "%s.%s", folder, entry->name);
+				clean_name = entry->name;
 
-				/* If there's a suffix to the name, remove it. */
+				/* Then, if there's a suffix to the name, copy the name out without suffix. */
 
 				if (suffix != NULL) {
 					int name_length = strlen(entry->name);
 					int suffix_length = strlen(suffix);
 
-					if ((name_length > suffix_length) && (string_nocase_strcmp(entry->name + name_length - suffix_length, suffix) == 0))
-						*(entry->name + name_length - suffix_length) = '\0';
+					if ((name_length > suffix_length) && (string_nocase_strcmp(entry->name + name_length - suffix_length, suffix) == 0)) {
+						int i = 0;
+
+						for (; i < (name_length - suffix_length) && i < (FILE_SET_MAX_PATH_LEN - 1); i++)
+							clean_name_buffer[i] = entry->name[i];
+
+						clean_name_buffer[i] = '\0';
+						clean_name = clean_name_buffer;
+					}
 				}
 
-				debug_printf("Found %s at %s", entry->name, filename);
+				debug_printf("Found %s at %s.%s", clean_name, folder, entry->name);
 
-	//			file_instance_include_entry(&(instance->file_instances), type, entry->name, filename);
+				struct file_instance_block *file = NULL;
 
-				// TODO Find object (in previous and current).
-				// If not found,
+				/* For executables, check to see if we already have a corresponding source file. */
 
-				struct file_instance_block *file = file_instance_create_instance(instance->parent, instance, entry->name);
+				if (type == FILE_SET_TYPE_EXECUTABLE)
+					file = file_set_find_object(instance, clean_name, entry);
+
+				/* Now look for a previous instance */
+
+				if (file == NULL && instance->previous != NULL) // TODO - This should be unless full refresh.
+					file = file_set_find_object(instance->previous, clean_name, entry);
+
+				/* If the file doesn't exist, create a new instance. */
+
+				if (file == NULL) {
+					file = file_instance_create_instance(instance->parent, instance, clean_name);
+					debug_printf("Creating new file instance 0x%x", file);
+					if (file != NULL)
+						file_set_add_object(instance, file);
+				} else {
+					debug_printf("Reusing existing file instance 0x%x", file);
+				}
+
+				switch (type) {
+				case FILE_SET_TYPE_SOURCE:
+					file_instance_add_source_file(file, entry);
+					break;
+				case FILE_SET_TYPE_EXECUTABLE:
+					file_instance_add_executable_file(file, entry);
+					break;
+				default:
+					break;
+				}
 
 				// Merge flags as required.
-				// If required, add in as an object.
+				// If required, add in as an object. How do we know? Search for existing??
+				// On the executable pass, how do we remove a now invalid previous that matched
+				// on the source test???
 
-				file_set_add_object(instance, file);
+
 
 			}
-
-
 		}
 	} while (error == NULL && context != -1);
 }
 
-static struct file_set_block *file_set_find_object(struct file_set_block *instance, char *name)
+/**
+ * Given some file details read from the disc, see if we already have a file
+ * instance in out collection which might match it.
+ *
+ * \param *instance		Pointer to the file set instance to be searched.
+ *
+ */
+
+static struct file_instance_block *file_set_find_object(struct file_set_block *instance, char *clean_name, osgbpb_info *entry)
 {
 	if (instance == NULL || instance->objects == NULL)
 		return NULL;
 
 	for (int i = 0; i < instance->object_count; i++) {
-		// TODO -- Match against the file instance.
+		if (file_instance_compare_object(instance->objects[i], clean_name, entry))
+			return instance->objects[i];
 	}
+
+	return NULL;
 }

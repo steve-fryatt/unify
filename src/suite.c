@@ -30,6 +30,7 @@
 /* ANSI C header files */
 
 #include <string.h>
+#include <stddef.h>
 
 /* Acorn C header files */
 
@@ -205,7 +206,7 @@ void suite_delete_instance(struct suite_block *instance)
 	if (instance == NULL)
 		return;
 
-	debug_printf("Delete instance 0x%x", instance);
+	debug_printf("\\DDeleting test suite 0x%x", instance);
 
 	/* Delete the window. */
 
@@ -270,6 +271,33 @@ unsigned suite_store_text(struct suite_block *instance, char *text)
 	return textdump_store(instance->textdump, text);
 }
 
+/**
+ * Return the textdump base for a suite instance.
+ *
+ * \param *instance	Pointer to the Test Suite instance.
+ * \return		Pointer to the text dump, or NULL on failure.
+ */
+
+char *suite_get_textdump_base(struct suite_block *instance)
+{
+	if (instance == NULL)
+		return NULL;
+
+	return textdump_get_base(instance->textdump);
+}
+
+/**
+ * Add a file instance reference to the linked list in its parent test suite.
+ *
+ * NB: This returns the existing head of the linked list of file instaces. It
+ * is assumed that its caller will use this to link itself into the head of
+ * the chain.
+ *
+ * \param *instance		Pointer to the Test Suite instance to be updated.
+ * \param *file_instance	Pointer to the file instance to be added.
+ * \return			Pointer to the file instance which was
+ *				previously at the head of the chain.
+ */
 
 struct file_instance_block *suite_store_file_instance(struct suite_block *instance, struct file_instance_block *file_instance)
 {
@@ -281,6 +309,17 @@ struct file_instance_block *suite_store_file_instance(struct suite_block *instan
 
 	return next;
 }
+
+/**
+ * Return a path to a specific folder within a test suite, writing it into the
+ * supplied buffer.
+ *
+ * \param *instance	Pointer to the test suite to be queried.
+ * \param *buffer	Pointer to the buffer to take the returned path.
+ * \param length	The length of the supplied buffer, in bytes.
+ * \param folder	The folder to be returned.
+ * \return		TRUE if successful; FALSE on failure.
+ */
 
 osbool suite_read_folder_path(struct suite_block *instance, char *buffer, size_t length, enum suite_folder folder)
 {
@@ -333,6 +372,16 @@ static void suite_close_handler(void *data)
 	suite_delete_instance(instance);
 }
 
+/**
+ * Handle line redraw events from an instance window.
+ *
+ * \param line		The index of the line in the window.
+ * \param *content	Pointer to a struct in which to return the line data.
+ * \param *data		Pointer to our client data, which should be a
+ *			pointer to an instance.
+ * \return		TRUE if the line was valid; else FALSE.
+ */
+
 static osbool suite_redraw_line_handler(int line, struct window_line *content, void *data)
 {
 	struct suite_block *instance = data;
@@ -343,12 +392,30 @@ static osbool suite_redraw_line_handler(int line, struct window_line *content, v
 	if (textdump_base == NULL)
 		return FALSE;
 
-	unsigned text = file_set_get_object_name(instance->file_sets, line);
-	if (text == TEXTDUMP_NULL)
+	struct file_instance_line_details line_details;
+
+	if (!file_set_get_object_line_details(instance->file_sets, line, &line_details))
 		return FALSE;
 
-	content->text = textdump_base + text;
-	content->status = WINDOW_STATUS_FAIL;
+	if (line_details.name == TEXTDUMP_NULL)
+		return FALSE;
+
+	content->text = textdump_base + line_details.name;
+	switch (line_details.status) {
+	case FILE_INSTANCE_STATUS_PASS:
+		content->status = WINDOW_STATUS_PASS;
+		break;
+	case FILE_INSTANCE_STATUS_FAIL:
+		content->status = WINDOW_STATUS_FAIL;
+		break;
+	case FILE_INSTANCE_STATUS_UNKNOWN:
+	case FILE_INSTANCE_STATUS_READY_TO_RUN:
+		content->status = WINDOW_STATUS_UNKNOWN;
+		break;
+	default:
+		content->status = WINDOW_STATUS_ERROR;
+		break;
+	}
 
 	content->count = 0;
 	content->total = 100;

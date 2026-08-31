@@ -29,6 +29,8 @@
 
 /* ANSI C header files */
 
+#include <stdint.h>
+#include <stddef.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
@@ -38,6 +40,7 @@
 /* OSLib header files */
 
 #include "oslib/os.h"
+#include "oslib/osgbpb.h"
 #include "oslib/taskwindow.h"
 #include "oslib/wimp.h"
 
@@ -65,6 +68,26 @@
 
 /* Structure definitions. */
 
+/**
+ * Details of a file within a file instance.
+ */
+
+struct file_instance_details {
+	/**
+	 * Text dump offset to the name of the file.
+	 */
+	unsigned name;
+
+	/**
+	 * The timestamp of the file as recorded in the instance.
+	 */
+	uint64_t timestamp;
+};
+
+/**
+ * The definition of a file instance.
+ */
+
 struct file_instance_block {
 	/**
 	 * Pointer to the parent test suite.
@@ -87,17 +110,26 @@ struct file_instance_block {
 	 */
 	unsigned name;
 
+	/**
+	 * Details of the source file.
+	 */
+	struct file_instance_details source;
+
+	/**
+	 * Details of the executable file.
+	 */
+	struct file_instance_details executable;
+
+
 	enum file_instance_status status;
-
-	char source_file[FILE_INSTANCE_NAME_LEN];
-
-	char absolute_file[FILE_INSTANCE_NAME_LEN];
 };
 
 /* Global variables. */
 
 
 /* Static function prototypes. */
+
+static void file_instance_update_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry);
 
 static osbool file_instance_scan_source(char *filename);
 static osbool file_instance_scan_block(FILE *fh, int level);
@@ -138,9 +170,9 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
 
 	new->parent = parent;
 	new->initial = initial;
-	new->status = FILE_INSTANCE_STATUS_NONE;
-	*new->source_file = '\0';
-	*new->absolute_file = '\0';
+	new->status = FILE_INSTANCE_STATUS_UNKNOWN;
+	new->source.name = TEXTDUMP_NULL;
+	new->executable.name = TEXTDUMP_NULL;
 
 	new->name = suite_store_text(parent, name);
 	if (new->name == TEXTDUMP_NULL) {
@@ -184,59 +216,107 @@ struct file_instance_block *file_instance_delete_instance(struct file_instance_b
 	return next;
 }
 
-unsigned file_instance_get_name(struct file_instance_block *instance)
+/**
+ * Return the details for required for redrawing a display line of a Test File
+ * instance.
+ *
+ * \param *instance	Pointer to the instance of interest.
+ * \param *details	Pointer to a struct in which the details should be
+ *			returned.
+ * \return		TRUE if valid details were returned; else FALSE.
+ */
+
+osbool file_instance_get_line_details(struct file_instance_block *instance, struct file_instance_line_details *details)
+{
+	if (instance == NULL || details == NULL)
+		return FALSE;
+
+	details->name = instance->name;
+	details->status = instance->status;
+
+	return TRUE;
+}
+
+/**
+ * Compare the details of an object found on disc with those stored in a
+ * file instance.
+ *
+ * \param *instance	Pointer to the instance to be checked.
+ * \param *clean_name	Pointer to a string containing the base name of the
+ *			object with any suffix removed.
+ * \param *entry	Pointer to the data for the object returned from OS_GBPB.
+ * \return		TRUE if the object matches; else FALSE.
+ */
+
+osbool file_instance_compare_object(struct file_instance_block *instance, char *clean_name, osgbpb_info *entry)
 {
 	if (instance == NULL)
-		return TEXTDUMP_NULL;
+		return FALSE;
 
-	return instance->name;
+	char *textdump_base = suite_get_textdump_base(instance->parent);
+	if (textdump_base == NULL || instance->name == TEXTDUMP_NULL)
+		return FALSE;
+
+	debug_printf("Comparing against %s", textdump_base + instance->name);
+
+	if (string_nocase_strcmp(clean_name, textdump_base + instance->name) == 0)
+		return TRUE;
+
+	return FALSE;
 }
 
 
-#if 0
-
-
-void file_instance_include_entry(struct file_instance_block **list, enum file_instance_status type, char* name, char *filename)
+void file_instance_add_source_file(struct file_instance_block *instance, osgbpb_info *entry)
 {
-	if (list == NULL || name == NULL || filename == NULL)
+	file_instance_update_file(instance->parent, &(instance->source), entry);
+}
+
+void file_instance_add_executable_file(struct file_instance_block *instance, osgbpb_info *entry)
+{
+	file_instance_update_file(instance->parent, &(instance->executable), entry);
+}
+
+static void file_instance_update_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry)
+{
+	if (parent == NULL || details == NULL || entry == NULL)
 		return;
 
-	debug_printf("Process name=%s, type=%d, filename=%s", name, type, filename);
+	details->name = suite_store_text(parent, entry->name);
 
-	struct file_instance_block *entry = *list;
-
-	while (entry != NULL && string_nocase_strcmp(entry->filename, name) != 0) {
-		debug_printf("Searching against = %s", entry->filename);
-		entry = entry->next;
+	if ((entry->load_addr & 0xfff00000u) == 0xfff00000u) {
+		details->timestamp = entry->exec_addr | ((uint64_t) (entry->load_addr & 0xffu) << 32);
+	} else {
+		details->timestamp = 0;
 	}
+}
 
-	debug_printf("Existing entry = 0x%x", entry);
-
-	if (entry == NULL)
-		entry = file_instance_create_instance(list, name);
-
-	debug_printf("Entry to update = 0x%x", entry);
-
-	if (entry == NULL)
+void file_instance_validate_files(struct file_instance_block *instance)
+{
+	if (instance == NULL)
 		return;
 
-	switch (type) {
-	case FILE_INSTANCE_STATUS_SOURCE:
-		string_copy(entry->source_file, filename, FILE_INSTANCE_NAME_LEN);
-		entry->status |= FILE_INSTANCE_STATUS_SOURCE;
-		file_instance_scan_source(filename);
-		break;
-
-	case FILE_INSTANCE_STATUS_ABSOLUTE:
-		string_copy(entry->absolute_file, filename, FILE_INSTANCE_NAME_LEN);
-		entry->status |= FILE_INSTANCE_STATUS_ABSOLUTE;
+	switch (instance->status) {
+	case FILE_INSTANCE_STATUS_UNKNOWN:
+		if (instance->source.name != TEXTDUMP_NULL && instance->executable.name != TEXTDUMP_NULL)
+			instance->status = FILE_INSTANCE_STATUS_READY_TO_RUN;
+		else if (instance->source.name == TEXTDUMP_NULL && instance->executable.name == TEXTDUMP_NULL)
+			instance->status = FILE_INSTANCE_STATUS_ERROR_NO_FILES;
+		else if (instance->source.name == TEXTDUMP_NULL)
+			instance->status = FILE_INSTANCE_STATUS_ERROR_NO_SOURCE;
+		else if (instance->executable.name == TEXTDUMP_NULL)
+			instance->status = FILE_INSTANCE_STATUS_ERROR_NO_EXECUTABLE;
+		else
+			instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_FILES;
 		break;
 
 	default:
 		break;
 	}
 }
-#endif
+
+
+
+
 
 static osbool file_instance_scan_source(char *filename)
 {
@@ -352,24 +432,24 @@ static osbool file_instance_found_call(FILE *fh)
 
 osbool file_instance_execute(struct file_instance_block *instance)
 {
-	if (instance == NULL)
+//	if (instance == NULL)
 		return FALSE;
 
-	char command[1024];
+//	char command[1024];
 
-	string_printf(command, 2014,
-			"TaskWindow \"Run %s\" -wimpslot 1024K -name \"Unit Test\" -quit -task &%08x -txt &%08x",
-			instance->absolute_file, main_task_handle, 0x1u
-	);
+//	string_printf(command, 2014,
+//			"TaskWindow \"Run %s\" -wimpslot 1024K -name \"Unit Test\" -quit -task &%08x -txt &%08x",
+//			instance->absolute_file, main_task_handle, 0x1u
+//	);
 
-	wimp_t child_task;
+//	wimp_t child_task;
 
-	os_error *error = xwimp_start_task(command, &child_task);
+//	os_error *error = xwimp_start_task(command, &child_task);
 
-	debug_printf("Launched %s", command);
-	debug_printf("Result = 0x%x, Child = 0x%x", error, child_task);
+//	debug_printf("Launched %s", command);
+//	debug_printf("Result = 0x%x, Child = 0x%x", error, child_task);
 
-	return (error == NULL) ? TRUE : FALSE;
+//	return (error == NULL) ? TRUE : FALSE;
 }
 
 

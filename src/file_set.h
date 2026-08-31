@@ -33,6 +33,8 @@
 #ifndef UNIFY_FILE_SET
 #define UNIFY_FILE_SET
 
+#include <stddef.h>
+
 struct file_set_block;
 
 #include "suite.h"
@@ -49,10 +51,40 @@ struct file_set_block;
 
 struct file_set_block *file_set_create_instance(struct suite_block *parent, struct file_set_block *previous);
 
+/**
+ * Destroy a file set instance.
+ *
+ * NB: It is left up to the caller to do something sensible with any linked
+ * list references. Currently this is called by the suite when cleaning up on
+ * deletion, and that just picks its way down the list removing items as it
+ * goes.
+ *
+ * \param *instance		Pointer to the file set instance to be destroyed.
+ * \return			Pointer to the previous file set known to the
+ *				instance, or NULL if there wasn't one.
+ */
+
 struct file_set_block *file_set_delete_instance(struct file_set_block *instance);
+
+/**
+ * Return the number of objects within a file set.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \return			The number of objects in the instance.
+ */
 
 size_t file_set_get_object_count(struct file_set_block *instance);
 
-unsigned file_set_get_object_name(struct file_set_block *instance, int i);
+/**
+ * Return the details of a file instance required for redraw, for a specific
+ * line from within the file set.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \param line			The line number from which to retiurn details.
+ * \param *details		Pointer to a structure in memory to hold the
+ *				returned details.
+ */
+
+osbool file_set_get_object_line_details(struct file_set_block *instance, int line, struct file_instance_line_details *details);
 
 #endif

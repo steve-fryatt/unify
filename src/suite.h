@@ -37,6 +37,8 @@
 #ifndef UNIFY_SUITE
 #define UNIFY_SUITE
 
+#include <stddef.h>
+
 /**
  * The folder types within a test suite.
  */
@@ -92,7 +94,40 @@ void suite_delete_all(void);
 
 unsigned suite_store_text(struct suite_block *instance, char *text);
 
+/**
+ * Return the textdump base for a suite instance.
+ *
+ * \param *instance	Pointer to the Test Suite instance.
+ * \return		Pointer to the text dump, or NULL on failure.
+ */
+
+char *suite_get_textdump_base(struct suite_block *instance);
+
+/**
+ * Add a file instance reference to the linked list in its parent test suite.
+ *
+ * NB: This returns the existing head of the linked list of file instaces. It
+ * is assumed that its caller will use this to link itself into the head of
+ * the chain.
+ *
+ * \param *instance		Pointer to the Test Suite instance to be updated.
+ * \param *file_instance	Pointer to the file instance to be added.
+ * \return			Pointer to the file instance which was
+ *				previously at the head of the chain.
+ */
+
 struct file_instance_block *suite_store_file_instance(struct suite_block *instance, struct file_instance_block *file_instance);
+
+/**
+ * Return a path to a specific folder within a test suite, writing it into the
+ * supplied buffer.
+ *
+ * \param *instance	Pointer to the test suite to be queried.
+ * \param *buffer	Pointer to the buffer to take the returned path.
+ * \param length	The length of the supplied buffer, in bytes.
+ * \param folder	The folder to be returned.
+ * \return		TRUE if successful; FALSE on failure.
+ */
 
 osbool suite_read_folder_path(struct suite_block *instance, char *buffer, size_t length, enum suite_folder folder);
 
