@@ -31,7 +31,8 @@ APP := !Unify
 #PACKAGE := Unify
 #PACKAGELOC := Desktop
 
-OBJS =  file_instance.o	\
+OBJS =  date_time.o	\
+	file_instance.o	\
 	file_set.o	\
 	flexutils.o	\
 	iconbar.o	\

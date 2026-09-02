@@ -29,6 +29,8 @@
 
 /* ANSI C header files */
 
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -36,24 +38,27 @@
 
 /* OSLib header files */
 
-#include "oslib/colourtrans.h"
-#include "oslib/font.h"
-#include "oslib/os.h"
-#include "oslib/osspriteop.h"
-#include "oslib/wimp.h"
+#include <oslib/colourtrans.h>
+#include <oslib/font.h>
+#include <oslib/os.h>
+#include <oslib/osspriteop.h>
+#include <oslib/wimp.h>
 
 /* SF-Lib header files. */
 
-#include "sflib/errors.h"
-#include "sflib/event.h"
-#include "sflib/heap.h"
-#include "sflib/string.h"
-#include "sflib/templates.h"
-#include "sflib/windows.h"
+#include <sflib/errors.h>
+#include <sflib/event.h>
+#include <sflib/heap.h>
+#include <sflib/icons.h>
+#include <sflib/string.h>
+#include <sflib/templates.h>
+#include <sflib/windows.h>
 
 /* Application header files */
 
 #include "window.h"
+
+#include "date_time.h"
 
 /* Constant definitions. */
 
@@ -82,11 +87,27 @@
 #define WINDOW_DETAIL_BUFFER_LEN 16
 
 /**
+ * The amount of space allocated for the toolbar date field.
+ */
+
+#define WINDOW_DATE_FIELD_LEN 32
+
+/**
  * The icon templates.
  */
 
 #define WINDOW_TEMPLATE_ICON_NAME 0
 #define WINDOW_TEMPLATE_ICON_DETAIL 1
+
+/**
+ * The toolbar icons.
+ */
+
+#define WINDOW_TOOLBAR_ICON_DATE 0
+#define WINDOW_TOOLBAR_ICON_BACK 1
+#define WINDOW_TOOLBAR_ICON_FORWARD 2
+#define WINDOW_TOOLBAR_ICON_LATEST 3
+#define WINDOW_TOOLBAR_ICON_RUN 4
 
 /* Structure definitions. */
 
@@ -104,6 +125,8 @@ struct window_instance {
 	int width;				/**< The window width in OS units.		*/
 
 	int entries;				/**< The number of items in the window.		*/
+
+	char date_field[WINDOW_DATE_FIELD_LEN];	/**< Storage for the date field icon.		*/
 };
 
 /* Global variables. */
@@ -139,6 +162,7 @@ static void window_close_handler(wimp_close *close);
 static void window_redraw_handler(wimp_draw *redraw);
 static void window_scroll_handler(wimp_scroll *scroll);
 static osbool window_recalculate_columns(struct window_instance *instance, wimp_open *open);
+static void window_position_toolbar_icons(wimp_open *open, struct window_instance *instance);
 
 //static void window_format_numeric_data(struct window_redraw *value, char *buffer, size_t length);
 //static os_error *window_find_fonts(void);
@@ -156,7 +180,9 @@ void window_initialise(osspriteop_area *sprites)
 	window_definition = templates_load_window("List");
 	window_definition->sprite_area = sprites;
 	window_definition->icon_count = 0;
+
 	window_pane_definition = templates_load_window("ListPane");
+	window_pane_definition->sprite_area = sprites;
 }
 
 
@@ -198,8 +224,12 @@ struct window_instance *window_create_instance(struct window_definition *definit
 
 	/* Create the new window pane. */
 
-//	instance->width = pane_definition->visible.x1 - pane_definition->visible.x0;
 	instance->pane_size = window_pane_definition->visible.y1 - window_pane_definition->visible.y0;
+
+	instance->date_field[0] = '\0';
+	window_pane_definition->icons[WINDOW_TOOLBAR_ICON_DATE].data.indirected_text.text = instance->date_field;
+	window_pane_definition->icons[WINDOW_TOOLBAR_ICON_DATE].data.indirected_text.size = WINDOW_DATE_FIELD_LEN;
+
 	windows_place_as_toolbar(window_definition, window_pane_definition, instance->pane_size);
 
 	error = xwimp_create_window(window_pane_definition, &(instance->pane_handle));
@@ -226,10 +256,10 @@ struct window_instance *window_create_instance(struct window_definition *definit
 	wimp_open_window((wimp_open *) &window);
 
 	windows_open_nested_as_toolbar(instance->pane_handle, instance->handle, instance->pane_size, FALSE);
+	window_position_toolbar_icons((wimp_open *) &window, instance);
 
 	return instance;
 }
-
 
 /**
  * Destroy a text window instance.
@@ -264,11 +294,13 @@ void window_delete_instance(struct window_instance *instance)
 static void window_open_handler(wimp_open *open)
 {
 	struct window_instance *instance = event_get_window_user_data(open->w);
-	if (instance == NULL)
+	if (instance == NULL || open->w != instance->handle)
 		return;
 
-	if (window_recalculate_columns(instance, open))
+	if (window_recalculate_columns(instance, open)) {
 		windows_redraw(open->w);
+		window_position_toolbar_icons(open, instance);
+	}
 
 	wimp_open_window(open);
 }
@@ -503,6 +535,62 @@ static osbool window_recalculate_columns(struct window_instance *instance, wimp_
 	instance->width = new_width;
 
 	return TRUE;
+}
+
+/**
+ * Update the positions of the toolbar icons.
+ *
+ * \param *open			The Wimp Open data block which triggered the
+ *				update.
+ * \param *instance		The window instance to be updated.
+ */
+
+static void window_position_toolbar_icons(wimp_open *open, struct window_instance *instance)
+{
+	wimp_icon_state icon_state = { .w = instance->pane_handle, .i = WINDOW_TOOLBAR_ICON_DATE };
+
+	os_error *error = xwimp_get_icon_state(&icon_state);
+	if (error != NULL)
+		return;
+
+	int window_rhs = (open->visible.x1 - open->visible.x0) + open->xscroll;
+
+	error = xwimp_resize_icon(
+		icon_state.w,
+		icon_state.i,
+		icon_state.icon.extent.x0,
+		icon_state.icon.extent.y0,
+		window_rhs - 4,
+		icon_state.icon.extent.y1
+	);
+	if (error != NULL)
+		return;
+
+	xwimp_force_redraw(
+		icon_state.w,
+		icon_state.icon.extent.x0,
+		icon_state.icon.extent.y0,
+		window_rhs,
+		icon_state.icon.extent.y1
+	);
+}
+
+/**
+ * Update the window content.
+ *
+ * \param *instance		The instance to update.
+ * \param time			The timestamp of the new content.
+ */
+
+void window_set_new_content(struct window_instance *instance, uint64_t time)
+{
+	if (instance == NULL)
+		return;
+
+	/* Update the date field. */
+
+	date_time_write_standard_string(time, instance->date_field, WINDOW_DATE_FIELD_LEN);
+	wimp_set_icon_state(instance->pane_handle, WINDOW_TOOLBAR_ICON_DATE, 0, 0);
 }
 
 /**

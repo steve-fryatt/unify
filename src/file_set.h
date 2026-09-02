@@ -34,6 +34,27 @@
 #define UNIFY_FILE_SET
 
 #include <stddef.h>
+#include <stdint.h>
+
+/**
+ * Details of a File Set instance for external parties.
+ */
+
+struct file_set_details {
+	/**
+	 * The number of objects in the set.
+	 */
+	int object_count;
+
+	/**
+	 * The time when the set was created.
+	 */
+	uint64_t timestamp;
+};
+
+/**
+ * A File Set instance.
+ */
 
 struct file_set_block;
 
@@ -67,13 +88,15 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 struct file_set_block *file_set_delete_instance(struct file_set_block *instance);
 
 /**
- * Return the number of objects within a file set.
+ * Return the details of a file set.
  *
  * \param *instance		Pointer to the file set instance of interest.
- * \return			The number of objects in the instance.
+ * \param *details		Pointer to a structure in memory to hold the
+ *				returned details.
+ * \return			TRUE if successful; FALSE on error.
  */
 
-size_t file_set_get_object_count(struct file_set_block *instance);
+size_t file_set_get_details(struct file_set_block *instance, struct file_set_details *details);
 
 /**
  * Return the details of a file instance required for redraw, for a specific
@@ -83,6 +106,7 @@ size_t file_set_get_object_count(struct file_set_block *instance);
  * \param line			The line number from which to retiurn details.
  * \param *details		Pointer to a structure in memory to hold the
  *				returned details.
+ * \return			TRUE if successful; FALSE on error.
  */
 
 osbool file_set_get_object_line_details(struct file_set_block *instance, int line, struct file_instance_line_details *details);

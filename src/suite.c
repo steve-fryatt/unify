@@ -188,8 +188,14 @@ osbool suite_create_instance(char *folder)
 
 	new->file_sets = file_set_create_instance(new, new->file_sets);
 
-	int objects = file_set_get_object_count(new->file_sets);
-	window_set_extent(new->window, objects);
+	/* Update the window for the new set. */
+
+	struct file_set_details details;
+
+	if (file_set_get_details(new->file_sets, &details)) {
+		window_set_extent(new->window, details.object_count);
+		window_set_new_content(new->window, details.timestamp);
+	}
 
 	return TRUE;
 }

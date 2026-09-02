@@ -30,9 +30,12 @@
 #ifndef UNIFY_WINDOW
 #define UNIFY_WINDOW
 
-#include "oslib/os.h"
-#include "oslib/osspriteop.h"
-#include "oslib/wimp.h"
+#include <stddef.h>
+#include <stdint.h>
+
+#include <oslib/os.h>
+#include <oslib/osspriteop.h>
+#include <oslib/wimp.h>
 
 /**
  * A text window instance.
@@ -208,6 +211,15 @@ struct window_instance *window_create_instance(struct window_definition *definit
  */
 
 void window_delete_instance(struct window_instance *instance);
+
+/**
+ * Update the window content.
+ *
+ * \param *instance		The instance to update.
+ * \param time			The timestamp of the new content.
+ */
+
+void window_set_new_content(struct window_instance *instance, uint64_t time);
 
 /**
  * Set the size of an in an instance window in terms of the number of entries

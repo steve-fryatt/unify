@@ -37,25 +37,24 @@
 
 /* OSLib header files */
 
-#include "oslib/os.h"
-#include "oslib/osfile.h"
-#include "oslib/osgbpb.h"
-#include "oslib/osword.h"
-#include "oslib/territory.h"
-#include "oslib/wimp.h"
+#include <oslib/os.h>
+#include <oslib/osfile.h>
+#include <oslib/osgbpb.h>
+#include <oslib/wimp.h>
 
 /* SF-Lib header files. */
 
-#include "sflib/debug.h"
-#include "sflib/errors.h"
-#include "sflib/general.h"
-#include "sflib/heap.h"
-#include "sflib/string.h"
+#include <sflib/debug.h>
+#include <sflib/errors.h>
+#include <sflib/general.h>
+#include <sflib/heap.h>
+#include <sflib/string.h>
 
 /* Application header files */
 
 #include "file_set.h"
 
+#include "date_time.h"
 #include "file_instance.h"
 #include "flexutils.h"
 #include "suite.h"
@@ -139,8 +138,6 @@ static osbool file_set_add_object(struct file_set_block *instance, struct file_i
 static void file_set_find_objects(struct file_set_block *instance, enum file_set_type type);
 static struct file_instance_block *file_set_find_object(struct file_set_block *instance, char *clean_name, osgbpb_info *entry);
 
-static void file_set_convert_time(uint64_t time, char *buffer, size_t length); // TODO -- Move into its own file.
-
 
 /**
  * Create a new file set instance, by scanning the parent suite and creating a
@@ -154,13 +151,6 @@ static void file_set_convert_time(uint64_t time, char *buffer, size_t length); /
 
 struct file_set_block *file_set_create_instance(struct suite_block *parent, struct file_set_block *previous)
 {
-	oswordreadclock_utc_block utc = { .op = oswordreadclock_OP_UTC };
-	os_error *error = xoswordreadclock_utc(&utc);
-	if (error != NULL) {
-		error_report_os_error(error, wimp_ERROR_BOX_CANCEL_ICON);
-		return NULL;
-	}
-
 	/* Allocate the instance memory and fill the data. */
 
 	struct file_set_block *new = heap_alloc(sizeof(struct file_set_block));
@@ -170,7 +160,7 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 	new->objects = NULL;
 	new->object_space = FILE_SET_ALLOCATION_UNIT;
 	new->object_count = 0;
-	new->timestamp = ((uint64_t) utc.utc[0] << 0) | ((uint64_t) utc.utc[1] << 8) | ((uint64_t) utc.utc[2] << 16) | ((uint64_t) utc.utc[3] << 24) | ((uint64_t) utc.utc[4] << 32);
+	new->timestamp = date_time_read_current_time();
 
 	if (!flexutils_allocate((void **) &(new->objects), sizeof(struct file_instance_block *), new->object_space)) {
 		heap_free(new);
@@ -189,7 +179,7 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 
 	debug_printf("\\kNew file set done!");
 	char timebuf[128];
-	file_set_convert_time(new->timestamp, timebuf, 128);
+	date_time_write_standard_string(new->timestamp, timebuf, 128);
 
 	debug_printf("File set created at %s", timebuf);
 
@@ -199,23 +189,6 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 		file_instance_validate_files(new->objects[i]);
 
 	return new;
-}
-
-
-static void file_set_convert_time(uint64_t time, char *buffer, size_t length) // TODO -- Move into its own file.
-{
-	if (buffer == NULL || length == 0)
-		return;
-
-	os_date_and_time os;
-
-	os[0] = (time >> 0) && 0xffu;
-	os[1] = (time >> 8) && 0xffu;
-	os[2] = (time >> 16) && 0xffu;
-	os[3] = (time >> 24) && 0xffu;
-	os[4] = (time >> 32) && 0xffu;
-
-	territory_convert_standard_date_and_time(territory_CURRENT, (const os_date_and_time *) &os, buffer, length);
 }
 
 /**
@@ -280,18 +253,23 @@ static osbool file_set_add_object(struct file_set_block *instance, struct file_i
 }
 
 /**
- * Return the number of objects within a file set.
+ * Return the details of a file set.
  *
  * \param *instance		Pointer to the file set instance of interest.
- * \return			The number of objects in the instance.
+ * \param *details		Pointer to a structure in memory to hold the
+ *				returned details.
+ * \return			TRUE if successful; FALSE on error.
  */
 
-size_t file_set_get_object_count(struct file_set_block *instance)
+size_t file_set_get_details(struct file_set_block *instance, struct file_set_details *details)
 {
-	if (instance == NULL)
-		return 0;
+	if (instance == NULL || details == NULL)
+		return FALSE;
 
-	return instance->object_count;
+	details->object_count = instance->object_count;
+	details->timestamp = instance->timestamp;
+
+	return TRUE;
 }
 
 /**
@@ -302,6 +280,7 @@ size_t file_set_get_object_count(struct file_set_block *instance)
  * \param line			The line number from which to retiurn details.
  * \param *details		Pointer to a structure in memory to hold the
  *				returned details.
+ * \return			TRUE if successful; FALSE on error.
  */
 
 osbool file_set_get_object_line_details(struct file_set_block *instance, int line, struct file_instance_line_details *details)
