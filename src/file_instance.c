@@ -39,17 +39,17 @@
 
 /* OSLib header files */
 
-#include "oslib/os.h"
-#include "oslib/osgbpb.h"
-#include "oslib/taskwindow.h"
-#include "oslib/wimp.h"
+#include <oslib/os.h>
+#include <oslib/osgbpb.h>
+#include <oslib/taskwindow.h>
+#include <oslib/wimp.h>
 
 /* SF-Lib header files. */
 
-#include "sflib/debug.h"
-#include "sflib/event.h"
-#include "sflib/heap.h"
-#include "sflib/string.h"
+#include <sflib/debug.h>
+#include <sflib/event.h>
+#include <sflib/heap.h>
+#include <sflib/string.h>
 
 /* Application header files */
 

@@ -30,7 +30,7 @@
 #ifndef UNIFY_FILE_INSTANCE
 #define UNIFY_FILE_INSTANCE
 
-#include "oslib/osgbpb.h"
+#include <oslib/osgbpb.h>
 
 /**
  * The status of a file instance.

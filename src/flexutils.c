@@ -34,15 +34,15 @@
 
 /* Acorn C Header files. */
 
-#include "flex.h"
+#include <flex.h>
 
 /* OSLib Header files. */
 
-#include "oslib/types.h"
+#include <oslib/types.h>
 
 /* SFLib Header files. */
 
-#include "sflib/debug.h"
+#include <sflib/debug.h>
 
 /* Application header files. */
 

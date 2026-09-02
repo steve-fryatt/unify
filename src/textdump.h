@@ -28,7 +28,7 @@
 #ifndef UNIFY_TEXTDUMP
 #define UNIFY_TEXTDUMP
 
-#include "oslib/types.h"
+#include <oslib/types.h>
 
 struct textdump_block;
 

@@ -38,9 +38,9 @@
 
 /* SF-Lib header files. */
 
-#include "sflib/debug.h"
-#include "sflib/heap.h"
-#include "sflib/string.h"
+#include <sflib/debug.h>
+#include <sflib/heap.h>
+#include <sflib/string.h>
 
 /* Application header files */
 

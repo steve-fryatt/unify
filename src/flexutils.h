@@ -33,8 +33,8 @@
 #include <stdlib.h>
 #include <stddef.h>
 
-#include "oslib/types.h"
-#include "flex.h"
+#include <oslib/types.h>
+#include <flex.h>
 
 
 /**

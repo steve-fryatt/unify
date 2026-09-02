@@ -35,21 +35,21 @@
 
 /* OSLib header files */
 
-#include "oslib/os.h"
-#include "oslib/osfile.h"
-#include "oslib/wimp.h"
+#include <oslib/os.h>
+#include <oslib/osfile.h>
+#include <oslib/wimp.h>
 
 /* SF-Lib header files. */
 
-#include "sflib/dataxfer.h"
-#include "sflib/errors.h"
-#include "sflib/event.h"
-#include "sflib/icons.h"
-#include "sflib/ihelp.h"
-#include "sflib/msgs.h"
-#include "sflib/string.h"
-#include "sflib/templates.h"
-#include "sflib/url.h"
+#include <sflib/dataxfer.h>
+#include <sflib/errors.h>
+#include <sflib/event.h>
+#include <sflib/icons.h>
+#include <sflib/ihelp.h>
+#include <sflib/msgs.h>
+#include <sflib/string.h>
+#include <sflib/templates.h>
+#include <sflib/url.h>
 
 /* Application header files */
 

@@ -35,11 +35,11 @@
 
 /* SFLib Header files. */
 
-#include "sflib/heap.h"
+#include <sflib/heap.h>
 
 /* OSLib Header files. */
 
-#include "oslib/types.h"
+#include <oslib/types.h>
 
 /* Application header files. */
 
