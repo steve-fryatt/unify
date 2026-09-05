@@ -59,6 +59,7 @@
 #include "flexutils.h"
 #include "suite.h"
 #include "textdump.h"
+#include "window.h"
 
 /**
  * The increments to allocate space for file objects.
@@ -253,23 +254,24 @@ static osbool file_set_add_object(struct file_set_block *instance, struct file_i
 }
 
 /**
- * Return the details of a file set.
+ * Given a file set and a window instance, add the connetns of the file set
+ * to the window.
  *
- * \param *instance		Pointer to the file set instance of interest.
- * \param *details		Pointer to a structure in memory to hold the
- *				returned details.
- * \return			TRUE if successful; FALSE on error.
+ * \param *instance		Pointer to the file set to be added.
+ * \param *window		The window to add the file set to.
  */
 
-size_t file_set_get_details(struct file_set_block *instance, struct file_set_details *details)
+void file_set_add_to_window(struct file_set_block *instance, struct window_instance *window)
 {
-	if (instance == NULL || details == NULL)
-		return FALSE;
+	if (instance == NULL || window == NULL)
+		return;
 
-	details->object_count = instance->object_count;
-	details->timestamp = instance->timestamp;
+	window_start_new_content(window, instance->timestamp);
 
-	return TRUE;
+	for (int i = 0; i < instance->object_count; i++)
+		file_instance_add_to_window(instance->objects[i], window);
+
+	window_finish_new_content(window);
 }
 
 /**

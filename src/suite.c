@@ -119,7 +119,7 @@ struct suite_block *suite_list = NULL;
 /* Static function prototypes. */
 
 static void suite_close_handler(void *data);
-static osbool suite_redraw_line_handler(int line, struct window_line *content, void *data);
+static osbool suite_redraw_line_handler(int fold, int entry, struct window_line *content, void *data);
 
 /* The Test Suite window definiton. */
 
@@ -190,12 +190,7 @@ osbool suite_create_instance(char *folder)
 
 	/* Update the window for the new set. */
 
-	struct file_set_details details;
-
-	if (file_set_get_details(new->file_sets, &details)) {
-		window_set_extent(new->window, details.object_count);
-		window_set_new_content(new->window, details.timestamp);
-	}
+	file_set_add_to_window(new->file_sets, new->window);
 
 	return TRUE;
 }
@@ -381,14 +376,15 @@ static void suite_close_handler(void *data)
 /**
  * Handle line redraw events from an instance window.
  *
- * \param line		The index of the line in the window.
+ * \param fold		The index of the fold containing the line.
+ * \param entry		The index of the entry within the fold, or -1.
  * \param *content	Pointer to a struct in which to return the line data.
  * \param *data		Pointer to our client data, which should be a
  *			pointer to an instance.
  * \return		TRUE if the line was valid; else FALSE.
  */
 
-static osbool suite_redraw_line_handler(int line, struct window_line *content, void *data)
+static osbool suite_redraw_line_handler(int fold, int entry, struct window_line *content, void *data)
 {
 	struct suite_block *instance = data;
 	if (instance == NULL)
@@ -400,31 +396,35 @@ static osbool suite_redraw_line_handler(int line, struct window_line *content, v
 
 	struct file_instance_line_details line_details;
 
-	if (!file_set_get_object_line_details(instance->file_sets, line, &line_details))
-		return FALSE;
+	if (entry < 0) {
+		if (!file_set_get_object_line_details(instance->file_sets, fold, &line_details))
+			return FALSE;
 
-	if (line_details.name == TEXTDUMP_NULL)
-		return FALSE;
+		if (line_details.name == TEXTDUMP_NULL)
+			return FALSE;
 
-	content->text = textdump_base + line_details.name;
-	switch (line_details.status) {
-	case FILE_INSTANCE_STATUS_PASS:
-		content->status = WINDOW_STATUS_PASS;
-		break;
-	case FILE_INSTANCE_STATUS_FAIL:
-		content->status = WINDOW_STATUS_FAIL;
-		break;
-	case FILE_INSTANCE_STATUS_UNKNOWN:
-	case FILE_INSTANCE_STATUS_READY_TO_RUN:
+		content->text = textdump_base + line_details.name;
+		switch (line_details.status) {
+		case FILE_INSTANCE_STATUS_PASS:
+			content->status = WINDOW_STATUS_PASS;
+			break;
+		case FILE_INSTANCE_STATUS_FAIL:
+			content->status = WINDOW_STATUS_FAIL;
+			break;
+		case FILE_INSTANCE_STATUS_UNKNOWN:
+		case FILE_INSTANCE_STATUS_READY_TO_RUN:
+			content->status = WINDOW_STATUS_UNKNOWN;
+			break;
+		default:
+			content->status = WINDOW_STATUS_ERROR;
+			break;
+		}
+
+		content->count = 0;
+		content->total = 100;
+	} else {
+		content->text = "This is a line";
 		content->status = WINDOW_STATUS_UNKNOWN;
-		break;
-	default:
-		content->status = WINDOW_STATUS_ERROR;
-		break;
 	}
-
-	content->count = 0;
-	content->total = 100;
-
 	return TRUE;
 }

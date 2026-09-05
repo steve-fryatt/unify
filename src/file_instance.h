@@ -64,6 +64,7 @@ struct file_instance_block;
 
 #include "suite.h"
 #include "file_set.h"
+#include "window.h"
 
 /**
  * Initialise the Test File code.
@@ -96,6 +97,17 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
  */
 
 struct file_instance_block *file_instance_delete_instance(struct file_instance_block *instance);
+
+
+/**
+ * Given a window instance, request that a file instance adds itself to the
+ * windiow contents.
+ *
+ * \param *instance	Pointer to the instance to add.
+ * \param *window	Pointer to the window instance to take the file.
+ */
+
+void file_instance_add_to_window(struct file_instance_block *instance, struct window_instance *window);
 
 /**
  * Return the details for required for redrawing a display line of a Test File

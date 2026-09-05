@@ -37,28 +37,13 @@
 #include <stdint.h>
 
 /**
- * Details of a File Set instance for external parties.
- */
-
-struct file_set_details {
-	/**
-	 * The number of objects in the set.
-	 */
-	int object_count;
-
-	/**
-	 * The time when the set was created.
-	 */
-	uint64_t timestamp;
-};
-
-/**
  * A File Set instance.
  */
 
 struct file_set_block;
 
 #include "suite.h"
+#include "window.h"
 
 /**
  * Create a new file set instance, by scanning the parent suite and creating a
@@ -88,15 +73,14 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 struct file_set_block *file_set_delete_instance(struct file_set_block *instance);
 
 /**
- * Return the details of a file set.
+ * Given a file set and a window instance, add the connetns of the file set
+ * to the window.
  *
- * \param *instance		Pointer to the file set instance of interest.
- * \param *details		Pointer to a structure in memory to hold the
- *				returned details.
- * \return			TRUE if successful; FALSE on error.
+ * \param *instance		Pointer to the file set to be added.
+ * \param *window		The window to add the file set to.
  */
 
-size_t file_set_get_details(struct file_set_block *instance, struct file_set_details *details);
+ void file_set_add_to_window(struct file_set_block *instance, struct window_instance *window);
 
 /**
  * Return the details of a file instance required for redraw, for a specific

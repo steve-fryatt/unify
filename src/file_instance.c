@@ -59,6 +59,7 @@
 #include "main.h"
 #include "suite.h"
 #include "textdump.h"
+#include "window.h"
 
 /**
  * The maximum length of a test file name.
@@ -120,6 +121,10 @@ struct file_instance_block {
 	 */
 	struct file_instance_details executable;
 
+	/**
+	 * The window object associated with the file.
+	 */
+	unsigned window_object;
 
 	enum file_instance_status status;
 };
@@ -173,6 +178,7 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
 	new->status = FILE_INSTANCE_STATUS_UNKNOWN;
 	new->source.name = TEXTDUMP_NULL;
 	new->executable.name = TEXTDUMP_NULL;
+	new->window_object = WINDOW_NULL_FOLD;
 
 	new->name = suite_store_text(parent, name);
 	if (new->name == TEXTDUMP_NULL) {
@@ -214,6 +220,26 @@ struct file_instance_block *file_instance_delete_instance(struct file_instance_b
 	debug_printf("File instance deleted: 0x%x", instance);
 
 	return next;
+}
+
+/**
+ * Given a window instance, request that a file instance adds itself to the
+ * windiow contents.
+ *
+ * \param *instance	Pointer to the instance to add.
+ * \param *window	Pointer to the window instance to take the file.
+ */
+
+void file_instance_add_to_window(struct file_instance_block *instance, struct window_instance *window)
+{
+	if (instance == NULL || window == NULL)
+		return;
+
+	instance->window_object = window_add_new_fold(
+			window,
+			instance->window_object,
+			(instance->source.name == TEXTDUMP_NULL) ? 0 : 5	// TODO - This is a stub.
+	);
 }
 
 /**

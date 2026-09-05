@@ -38,6 +38,12 @@
 #include <oslib/wimp.h>
 
 /**
+ * A null window fold reference.
+ */
+
+#define WINDOW_NULL_FOLD ((unsigned) 0xffffffffu)
+
+/**
  * A text window instance.
  */
 
@@ -89,7 +95,7 @@ struct window_definition {
 	/**
 	 * Callback for requesting line redraw data.
 	 */
-	osbool (*callback_redraw)(int line, struct window_line *content, void *data);
+	osbool (*callback_redraw)(int fold, int entry, struct window_line *content, void *data);
 };
 
 #if 0
@@ -107,85 +113,6 @@ struct window_redraw {
 	int bytes;			/**< The number of bytes for a value line.	*/
 };
 #endif
-
-/**
- * The size of a horizontal scroll step.
- */
-
-#define WINDOW_HORIZONTAL_SCROLL 16
-
-/**
- * The height of a row icon in a window table.
- */
-
-#define WINDOW_ROW_ICON_HEIGHT 52
-
-/**
- * The horizontal spacing between rows in a window table.
- */
-
-#define WINDOW_ROW_GUTTER 4
-
-/**
- * The height of a window row.
- */
-
-#define WINDOW_ROW_HEIGHT (WINDOW_ROW_ICON_HEIGHT + WINDOW_ROW_GUTTER)
-
-/**
- * Calculate the first row to be included in a redraw operation.
- */
-
-#define WINDOW_REDRAW_TOP(toolbar, y) (((y) - (toolbar)) / WINDOW_ROW_HEIGHT)
-
-/**
- * Calculate the last row to be included in a redraw operation.
- */
-
-#define WINDOW_REDRAW_BASE(toolbar, y) (((y) - (toolbar) - 2) / WINDOW_ROW_HEIGHT)
-
-/**
- * Calculate the base of a row in a table view.
- */
-
-#define WINDOW_ROW_BASE(toolbar, y) ((-((y) + 1) * WINDOW_ROW_HEIGHT) - (toolbar))
-
-/**
- * Calculate the top of a row in a table view.
- */
-
-#define WINDOW_ROW_TOP(toolbar, y) ((-(y) * WINDOW_ROW_HEIGHT) - (toolbar) + WINDOW_ROW_GUTTER)
-
-/**
- * Calculate the base of an icon in a table view.
- */
-
-#define WINDOW_ROW_Y0(toolbar, y) ((-(y) * WINDOW_ROW_HEIGHT) - (toolbar) - WINDOW_ROW_ICON_HEIGHT)
-
-/**
- * Calculate the top of an icon in a table view.
- */
-
-#define WINDOW_ROW_Y1(toolbar, y) ((-(y) * WINDOW_ROW_HEIGHT) - (toolbar))
-
-/**
- * Calculate the raw row number based on a window mouse coordinate.
- */
-
-#define WINDOW_ROW(toolbar, y) (((-(y)) - (toolbar)) / WINDOW_ROW_HEIGHT)
-
-/**
- * Caluclate the position within a row, given a window mouse coordinate.
- */
-
-#define WINDOW_ROW_Y_POS(toolbar, y) (((-(y)) - (toolbar)) % WINDOW_ROW_HEIGHT)
-
-/* Return true or false if a ROW_Y_POS() value is above or below the icon
- * area of the row.
- */
-
-#define WINDOW_ROW_BELOW(y) ((y) < WINDOW_ROW_GUTTER)
-#define WINDOW_ROW_ABOVE(y) ((y) > WINDOW_ROW_HEIGHT)
 
 /**
  * Initialise the text window.
@@ -213,22 +140,100 @@ struct window_instance *window_create_instance(struct window_definition *definit
 void window_delete_instance(struct window_instance *instance);
 
 /**
- * Update the window content.
+ * Start to rebuild the contents of a window, discarding any previous content
+ * and setting up the timestamp.
  *
- * \param *instance		The instance to update.
+ * \param *instance		The instance to be updated.
  * \param time			The timestamp of the new content.
  */
 
-void window_set_new_content(struct window_instance *instance, uint64_t time);
+void window_start_new_content(struct window_instance *instance, uint64_t time);
 
 /**
- * Set the size of an in an instance window in terms of the number of entries
- * that it contains.
+ * Add a new fold to a window as part of a content update.
  *
- * \param *instance		The instance to update.
- * \param entries		The number of entries to show in the window.
- * */
+ * Before calling this function, window_start_new_content() must have been
+ * called. After calling it, window_finish_new_content() must be called.
+ *
+ * \param *instance		Pointer to the window instance being updated.
+ * \param id			A window object ID for the fold contents, if
+ *				one has previously be allocated.
+ * \param entries		The number of entries to be contained in the
+ *				fold.
+ * \return			A window object ID for the fold contents, which
+ *				may be the one supplied in the id parameter.
+ */
 
-void window_set_extent(struct window_instance *instance, int entries);
+unsigned window_add_new_fold(struct window_instance *instance, unsigned id, int entries);
+
+/**
+ * Finish rebuilding the contents of a window, recalculating the content
+ * details and redrawing the contents.
+ *
+ * This should be called after calling window_start_new_content().
+ *
+ * \param *instance		Pointer to the window instance being updated.
+ */
+
+void window_finish_new_content(struct window_instance *instance);
+
+
+/**
+ * Calculate the first row to be included in a redraw operation.
+ */
+
+//#define WINDOW_REDRAW_TOP(toolbar, y) (((y) - (toolbar)) / WINDOW_ROW_HEIGHT)
+
+/**
+ * Calculate the last row to be included in a redraw operation.
+ */
+
+//#define WINDOW_REDRAW_BASE(toolbar, y) (((y) - (toolbar) - 2) / WINDOW_ROW_HEIGHT)
+
+/**
+ * Calculate the base of a row in a table view.
+ */
+
+//#define WINDOW_ROW_BASE(toolbar, y) ((-((y) + 1) * WINDOW_ROW_HEIGHT) - (toolbar))
+
+/**
+ * Calculate the top of a row in a table view.
+ */
+
+//#define WINDOW_ROW_TOP(toolbar, y) ((-(y) * WINDOW_ROW_HEIGHT) - (toolbar) + WINDOW_ROW_GUTTER)
+
+/**
+ * Calculate the base of an icon in a table view.
+ */
+
+//#define WINDOW_ROW_Y0(toolbar, y) ((-(y) * WINDOW_ROW_HEIGHT) - (toolbar) - WINDOW_ROW_ICON_HEIGHT)
+
+/**
+ * Calculate the top of an icon in a table view.
+ */
+
+//#define WINDOW_ROW_Y1(toolbar, y) ((-(y) * WINDOW_ROW_HEIGHT) - (toolbar))
+
+/**
+ * Calculate the raw row number based on a window mouse coordinate.
+ */
+
+//#define WINDOW_ROW(toolbar, y) (((-(y)) - (toolbar)) / WINDOW_ROW_HEIGHT)
+
+/**
+ * Caluclate the position within a row, given a window mouse coordinate.
+ */
+
+//#define WINDOW_ROW_Y_POS(toolbar, y) (((-(y)) - (toolbar)) % WINDOW_ROW_HEIGHT)
+
+/* Return true or false if a ROW_Y_POS() value is above or below the icon
+ * area of the row.
+ */
+
+//#define WINDOW_ROW_BELOW(y) ((y) < WINDOW_ROW_GUTTER)
+//#define WINDOW_ROW_ABOVE(y) ((y) > WINDOW_ROW_HEIGHT)
+
+
+
 
 #endif
