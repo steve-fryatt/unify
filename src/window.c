@@ -888,7 +888,7 @@ unsigned window_add_new_fold(struct window_instance *instance, unsigned id, int 
 
 	/* Add a fold to the window. */
 
-	if (instance->fold_count >= instance->fold_count) {
+	if (instance->fold_count >= instance->fold_space) {
 		debug_printf("Active fold space full... expanding...");
 
 		size_t new_space = instance->fold_space;
