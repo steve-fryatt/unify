@@ -41,6 +41,6 @@ RMEnsure SharedCLibrary 5.43 Error Launcher requires version 5.43 or later of th
 
 | Allocate memory and run Unify
 
-WimpSlot -min 128k -max 128k
+WimpSlot -min 256k -max 256k
 
 Run <Unify$Dir>.!RunImage %*0

@@ -46,7 +46,7 @@ BadSprites:Failed to locate suitable application sprites file.
 #LogType:File Type
 #LogName:File Name
 
-Help.IconBar:\TUnify application, which can run and analyse unit test suites from Unity.
+Help.IconBar:\TUnify application, which can run and analyse unit test suites from Unity.|MDrag a test folder to the icon to load it.
 
 Help.ProgInfo:This \w displays information about Unify.
 Help.ProgInfo.Website:\Sopen the Unify home page in your web browser, if one has been seen.
@@ -54,5 +54,20 @@ Help.ProgInfo.Website:\Sopen the Unify home page in your web browser, if one has
 Help.IconBarMenu.00:\Rsee information about Unify.
 Help.IconBarMenu.01:\Sread Unify's online help.
 Help.IconBarMenu.02:\Squit Unify.
+
+Help.ListWindow:This \w contains details of the tests associated with a project.
+Help.ListWindow.Expand:\Stoggle the expanded state of the file.|MWhen expanded, all of the tests within the file are listed.
+Help.ListWindow.FileName:\Ta file containing unit tests.|MClick on the expansion button to the left to toggle display of the individual tests within it.
+Help.ListWindow.FileDetail:\Ta summary of the number of tests within the file, and the number which are passing.
+Help.ListWindow.TestName:\Ta test that exists within a test file.
+
+Help.ListPane:This \w contains details of the tests associated with a project.
+Help.ListPane.Date:\Tdate and time that the tests in the \w were run.|MStep backwards and forwards in time using the buttons on the left.
+Help.ListPane.Back:\Smove back to the previous test run.
+Help.ListPane.Forward:\Smove forwards to the following test run.
+Help.ListPane.Latest:\Sjump forwards to the most recent test run.
+Help.ListPane.Run:\Supdate the test results to reflect any changes to the files on disc.|M\Aperform a complete re-run of all of the tests.
+Help.ListPane.Contract:\Scontract all of the test files shown in the \w, so that just the file names are visible.
+Help.ListPane.Expand:\Sexpand all of the entries in the test \w, so that all of the tests are visible.
 
 #Help.LogListMenu.??:\Sopen this log for analysis.

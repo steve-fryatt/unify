@@ -53,6 +53,7 @@
 #include <sflib/event.h>
 #include <sflib/heap.h>
 #include <sflib/icons.h>
+#include <sflib/ihelp.h>
 #include <sflib/string.h>
 #include <sflib/templates.h>
 #include <sflib/windows.h>
@@ -133,6 +134,18 @@
 #define WINDOW_ROW_HEIGHT (WINDOW_ROW_ICON_HEIGHT + WINDOW_ROW_GUTTER)
 
 /**
+ * The memory allocation unit for window data structures.
+ */
+
+#define WINDOW_ALLOCATION_UNIT 10
+
+/**
+ * An unset line pointer for folds and objects.
+ */
+
+#define WINDOW_LINE_NONE ((unsigned) 0xffffffffu)
+
+/**
  * The icon templates.
  */
 
@@ -149,10 +162,8 @@
 #define WINDOW_TOOLBAR_ICON_FORWARD 2
 #define WINDOW_TOOLBAR_ICON_LATEST 3
 #define WINDOW_TOOLBAR_ICON_RUN 4
-
-#define WINDOW_ALLOCATION_UNIT 10
-
-#define WINDOW_LINE_NONE ((unsigned) 0xffffffffu)
+#define WINDOW_TOOLBAR_ICON_CONTRACT 5
+#define WINDOW_TOOLBAR_ICON_EXPAND 6
 
 /* Structure definitions. */
 
@@ -228,17 +239,20 @@ static font_f window_bold_font = font_SYSTEM;
 static void window_open_handler(wimp_open *open);
 static void window_close_handler(wimp_close *close);
 static void window_click_handler(wimp_pointer *pointer);
+static void window_toolbar_click_handler(wimp_pointer *pointer);
 static void window_redraw_handler(wimp_draw *redraw);
 static void window_scroll_handler(wimp_scroll *scroll);
 static osbool window_recalculate_columns(struct window_instance *instance, wimp_open *open);
 static void window_position_toolbar_icons(wimp_open *open, struct window_instance *instance);
 static void window_toggle_fold_icon(struct window_instance *instance, int fold);
+static void window_expand_contract_all_folds(struct window_instance *instance, osbool expanded);
 static void window_recalculate_display_lines(struct window_instance *instance);
 static void window_set_extent(struct window_instance *instance);
 static void window_force_redraw_fold(struct window_instance *instance, int fold);
 static void window_force_redraw_fold_to_end(struct window_instance *instance, int fold);
 static void window_force_redraw_lines(struct window_instance *instance, int first, int last);
-static osbool window_decode_click_data(struct window_instance *instance, wimp_pointer *pointer, int *fold, int *entry, wimp_i *icon);
+static void window_decode_interactive_help(char *buffer, wimp_w window, wimp_i icon, os_coord pos, wimp_mouse_state buttons);
+static osbool window_decode_click_data(struct window_instance *instance, os_coord pos, int *fold, int *entry, wimp_i *icon);
 static osbool window_get_rows_from_fold(struct window_instance *instance, int fold, int *top, int *bottom);
 static osbool window_get_fold_info_from_row(struct window_instance *instance, int row, int *fold_out, int *entry_out);
 
@@ -338,6 +352,8 @@ struct window_instance *window_create_instance(struct window_definition *definit
 		return NULL;
 	}
 
+	ihelp_add_window(instance->handle, "ListWindow", window_decode_interactive_help);
+
 	event_add_window_user_data(instance->handle, instance);
 	event_add_window_open_event(instance->handle, window_open_handler);
 	event_add_window_close_event(instance->handle, window_close_handler);
@@ -345,8 +361,10 @@ struct window_instance *window_create_instance(struct window_definition *definit
 	event_add_window_mouse_event(instance->handle, window_click_handler);
 	event_add_window_scroll_event(instance->handle, window_scroll_handler);
 
+	ihelp_add_window(instance->pane_handle, "ListPane", NULL);
+
 	event_add_window_user_data(instance->pane_handle, instance);
-//	event_add_window_mouse_event(instance->pane_handle, window_click_handler);
+	event_add_window_mouse_event(instance->pane_handle, window_toolbar_click_handler);
 
 	/* Open the windows. */
 
@@ -377,11 +395,17 @@ void window_delete_instance(struct window_instance *instance)
 
 	/* Delete the windows. */
 
-	if (instance->handle != NULL)
+	if (instance->handle != NULL) {
+		ihelp_remove_window(instance->handle);
+		event_delete_window(instance->handle);
 		wimp_delete_window(instance->handle);
+	}
 
-	if (instance->pane_handle != NULL)
+	if (instance->pane_handle != NULL) {
+		ihelp_remove_window(instance->pane_handle);
+		event_delete_window(instance->pane_handle);
 		wimp_delete_window(instance->pane_handle);
+	}
 
 	/* Free the memory used. */
 
@@ -440,12 +464,34 @@ static void window_click_handler(wimp_pointer *pointer)
 	int fold = 0, entry = 0;
 	wimp_i icon = wimp_ICON_WINDOW;
 
-	if (!window_decode_click_data(instance, pointer, &fold, &entry, &icon))
+	if (!window_decode_click_data(instance, pointer->pos, &fold, &entry, &icon))
 		return;
 
 	switch (icon) {
 	case WINDOW_TEMPLATE_ICON_EXPAND:
 		window_toggle_fold_icon(instance, fold);
+		break;
+	}
+}
+
+/**
+ * Handle Mouse events on an instance toolbar window.
+ *
+ * \param *pointer		The Wimp Pointer data block.
+ */
+
+static void window_toolbar_click_handler(wimp_pointer *pointer)
+{
+	struct window_instance *instance = event_get_window_user_data(pointer->w);
+	if (instance == NULL)
+		return;
+
+	switch (pointer->i) {
+	case WINDOW_TOOLBAR_ICON_EXPAND:
+		window_expand_contract_all_folds(instance, TRUE);
+		break;
+	case WINDOW_TOOLBAR_ICON_CONTRACT:
+		window_expand_contract_all_folds(instance, FALSE);
 		break;
 	}
 }
@@ -915,6 +961,27 @@ static void window_toggle_fold_icon(struct window_instance *instance, int fold)
 }
 
 /**
+ * Update all of the folds in a window to be either expanded or contracted.
+ *
+ * \param *instance		Pointer to the window instance to be updated.
+ * \param expanded		TRUE to expand all of the folds; FALSE to
+ *				contract them all.
+ */
+
+static void window_expand_contract_all_folds(struct window_instance *instance, osbool expanded)
+{
+	if (instance == NULL)
+		return;
+
+	for (int i = 0; i < instance->object_count; i++)
+		instance->known_objects[i].expanded = expanded;
+
+	window_recalculate_display_lines(instance);
+	window_set_extent(instance);
+	windows_redraw(instance->handle);
+}
+
+/**
  * Recalculate the number of display lines in a window, based on the content
  * and the state of the folds.
  *
@@ -1077,11 +1144,46 @@ static void window_force_redraw_lines(struct window_instance *instance, int firs
 }
 
 /**
+ * Decode data from an interactive help request over the main window.
+ *
+ * \param *buffer		Pointer to the buffer to take the icon name.
+ * \param window		The handle of the window under the pointer.
+ * \param icon			The handle of the icon under the pointer.
+ * \param pos			The screen coordinates of the mouse.
+ * \param buttons		The state of the mouse buttons.
+ */
+
+static void window_decode_interactive_help(char *buffer, wimp_w window, wimp_i icon, os_coord pos, wimp_mouse_state buttons)
+{
+	struct window_instance *instance = event_get_window_user_data(window);
+	if (instance == NULL || icon != wimp_ICON_WINDOW)
+		return;
+
+	int fold = 0, entry = 0;
+	wimp_i target = wimp_ICON_WINDOW;
+
+	if (!window_decode_click_data(instance, pos, &fold, &entry, &target))
+		return;
+
+	switch (target) {
+	case WINDOW_TEMPLATE_ICON_EXPAND:
+		string_copy(buffer, "Expand", IHELP_INAME_LEN);
+		break;
+	case WINDOW_TEMPLATE_ICON_NAME:
+		string_copy(buffer, (entry >= 0) ? "TestName" : "FileName", IHELP_INAME_LEN);
+		break;
+	case WINDOW_TEMPLATE_ICON_DETAIL:
+		string_copy(buffer, (entry >= 0) ? "TestDetail" : "FileDetail", IHELP_INAME_LEN);
+		break;
+	}
+}
+
+/**
  * Decode wimp_pointer data into fold, entry and icon values.
  *
  * \param *instance		Pointer to the window instance to which the data
  *				relates.
- * \param *pointer		Pointer to the pointer data to be decoded.
+ * \param pos			The pointer coordinate data to be decoded.
  * \param *fold			Pointer to a valiable in which to return the
  *				calculated fold index, or NULL.
  * \param *entry		Pointer to a valiable in which to return the
@@ -1092,9 +1194,9 @@ static void window_force_redraw_lines(struct window_instance *instance, int firs
  *				otherwise FALSE.
  */
 
-static osbool window_decode_click_data(struct window_instance *instance, wimp_pointer *pointer, int *fold, int *entry, wimp_i *icon)
+static osbool window_decode_click_data(struct window_instance *instance, os_coord pos, int *fold, int *entry, wimp_i *icon)
 {
-	if (instance == NULL || pointer == NULL)
+	if (instance == NULL)
 		return FALSE;
 
 	if (fold != NULL)
@@ -1108,11 +1210,11 @@ static osbool window_decode_click_data(struct window_instance *instance, wimp_po
 
 	/* Calculate the window X and Y coordinates. */
 
-	wimp_window_state state = { .w = pointer->w };
+	wimp_window_state state = { .w = instance->handle };
 	wimp_get_window_state(&state);
 
-	int xpos = (pointer->pos.x - state.visible.x0) + state.xscroll;
-	int ypos = (pointer->pos.y - state.visible.y1) + state.yscroll;
+	int xpos = (pos.x - state.visible.x0) + state.xscroll;
+	int ypos = (pos.y - state.visible.y1) + state.yscroll;
 
 	/* Calculate the row. */
 
