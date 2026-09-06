@@ -70,6 +70,26 @@ enum window_status {
 };
 
 /**
+ * The navigation targets.
+ */
+
+enum window_navigation_target {
+	WINDOW_NAVIGATION_TARGET_BACK,
+	WINDOW_NAVIGATION_TARGET_FORWARD,
+	WINDOW_NAVIGATION_TARGET_LATEST
+};
+
+/**
+ * The relationship of the window content to its surrounding data.
+ */
+
+enum window_content_relation {
+	WINDOW_CONTENT_RELATION_NONE = 0,
+	WINDOW_CONTENT_RELATION_FIRST = 1,
+	WINDOW_CONTENT_RELATION_LAST = 2
+};
+
+/**
  * Data for a window line redraw.
  */
 
@@ -96,6 +116,17 @@ struct window_definition {
 	 * Callback for requesting line redraw data.
 	 */
 	osbool (*callback_redraw)(int fold, int entry, struct window_line *content, void *data);
+
+	/**
+	 * Callback for navigating around test runs.
+	 */
+	void (*callback_navigate)(enum window_navigation_target target, void *data);
+
+	/**
+	 * Callback for requesting a new test run.
+	 */
+
+	void (*callback_run)(osbool full, void *data);
 };
 
 #if 0
@@ -145,9 +176,11 @@ void window_delete_instance(struct window_instance *instance);
  *
  * \param *instance		The instance to be updated.
  * \param time			The timestamp of the new content.
+ * \param relation		The relationship of the new data to any other
+ *				content.
  */
 
-void window_start_new_content(struct window_instance *instance, uint64_t time);
+void window_start_new_content(struct window_instance *instance, uint64_t time, enum window_content_relation relation);
 
 /**
  * Add a new fold to a window as part of a content update.

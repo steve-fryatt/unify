@@ -55,6 +55,7 @@ enum suite_folder {
 struct suite_block;
 
 #include "file_instance.h"
+#include "file_set.h"
 
 /**
  * Create a new Test Suite instance and link it in to the collection of
@@ -102,6 +103,16 @@ unsigned suite_store_text(struct suite_block *instance, char *text);
  */
 
 char *suite_get_textdump_base(struct suite_block *instance);
+
+/**
+ * Test whether a file set is the first one stored in a suite instance.
+ *
+ * \param *instance	Pointer to the test suite instance.
+ * \param *set		Pointer to the file set instance to be checked.
+ * \return		TRUE if the file set is first in the instance.
+ */
+
+osbool suite_file_set_is_first(struct suite_block *instance, struct file_set_block *set);
 
 /**
  * Add a file instance reference to the linked list in its parent test suite.

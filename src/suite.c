@@ -103,6 +103,11 @@ struct suite_block {
 	struct file_instance_block *file_instances;
 
 	/**
+	 * Pointer to the file set currently on display in the window.
+	 */
+	struct file_set_block *current_file_set;
+
+	/**
 	 * Pointer to the next suite, or NULL.
 	 */
 	struct suite_block *next;
@@ -119,6 +124,8 @@ struct suite_block *suite_list = NULL;
 /* Static function prototypes. */
 
 static void suite_close_handler(void *data);
+static void suite_navigation_handler(enum window_navigation_target target, void *data);
+static void suite_run_handler(osbool full, void *data);
 static osbool suite_redraw_line_handler(int fold, int entry, struct window_line *content, void *data);
 
 /* The Test Suite window definiton. */
@@ -126,7 +133,9 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 static struct window_definition suite_window_definition = {
 	.type = WINDOW_TYPE_SUITE,
 	.callback_close = suite_close_handler,
-	.callback_redraw = suite_redraw_line_handler
+	.callback_redraw = suite_redraw_line_handler,
+	.callback_navigate = suite_navigation_handler,
+	.callback_run = suite_run_handler
 };
 
 /**
@@ -148,6 +157,7 @@ osbool suite_create_instance(char *folder)
 	new->textdump = NULL;
 	new->file_sets = NULL;
 	new->file_instances = NULL;
+	new->current_file_set = NULL;
 
 	/* Set up the text dump to store strings for the suite. */
 
@@ -190,7 +200,9 @@ osbool suite_create_instance(char *folder)
 
 	/* Update the window for the new set. */
 
-	file_set_add_to_window(new->file_sets, new->window);
+	new->current_file_set = new->file_sets;
+
+	file_set_add_to_window(new->current_file_set, new->window);
 
 	return TRUE;
 }
@@ -288,6 +300,19 @@ char *suite_get_textdump_base(struct suite_block *instance)
 }
 
 /**
+ * Test whether a file set is the first one stored in a suite instance.
+ *
+ * \param *instance	Pointer to the test suite instance.
+ * \param *set		Pointer to the file set instance to be checked.
+ * \return		TRUE if the file set is first in the instance.
+ */
+
+osbool suite_file_set_is_first(struct suite_block *instance, struct file_set_block *set)
+{
+	return (instance == NULL || instance->file_sets == set) ? TRUE : FALSE;
+}
+
+/**
  * Add a file instance reference to the linked list in its parent test suite.
  *
  * NB: This returns the existing head of the linked list of file instaces. It
@@ -373,6 +398,56 @@ static void suite_close_handler(void *data)
 	suite_delete_instance(instance);
 }
 
+static void suite_navigation_handler(enum window_navigation_target target, void *data)
+{
+	struct suite_block *instance = data;
+	if (instance == NULL)
+		return;
+
+	struct file_set_block *destination = NULL;
+
+	switch (target) {
+	case WINDOW_NAVIGATION_TARGET_BACK:
+		destination = file_set_find_previous_object(instance->current_file_set);
+		break;
+	case WINDOW_NAVIGATION_TARGET_FORWARD:
+		destination = file_set_find_next_object(instance->current_file_set, instance->file_sets);
+		break;
+	case WINDOW_NAVIGATION_TARGET_LATEST:
+		destination = instance->file_sets;
+		break;
+	}
+
+	if (destination == NULL)
+		return;
+
+	instance->current_file_set = destination;
+	file_set_add_to_window(instance->current_file_set, instance->window);
+}
+
+/**
+ * Handle run events from an instance window.
+ *
+ * \param full		TRUE if this should be a full run; FALSE for an incremental
+ *			update.
+ * \param *data		Pointer to our client data, which should be a
+ *			pointer to an instance.
+ */
+
+static void suite_run_handler(osbool full, void *data)
+{
+	struct suite_block *instance = data;
+	if (instance == NULL)
+		return;
+
+	instance->file_sets = file_set_create_instance(instance, instance->file_sets);
+
+	/* Update the window for the new set. */
+
+	instance->current_file_set = instance->file_sets;
+	file_set_add_to_window(instance->current_file_set, instance->window);
+}
+
 /**
  * Handle line redraw events from an instance window.
  *
@@ -397,7 +472,7 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 	struct file_instance_line_details line_details;
 
 	if (entry < 0) {
-		if (!file_set_get_object_line_details(instance->file_sets, fold, &line_details))
+		if (!file_set_get_object_line_details(instance->current_file_set, fold, &line_details))
 			return FALSE;
 
 		if (line_details.name == TEXTDUMP_NULL)

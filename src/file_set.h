@@ -80,7 +80,26 @@ struct file_set_block *file_set_delete_instance(struct file_set_block *instance)
  * \param *window		The window to add the file set to.
  */
 
- void file_set_add_to_window(struct file_set_block *instance, struct window_instance *window);
+void file_set_add_to_window(struct file_set_block *instance, struct window_instance *window);
+
+/**
+ * Given a file set instance, find the previous instance in the timeline.
+ *
+ * \param *instance		Pointer to the file set to start from.
+ * \return			Pointer to the previous instance, or NULL.
+ */
+
+struct file_set_block *file_set_find_previous_object(struct file_set_block *instance);
+
+/**
+ * Given a file set instance, find the next instance in the timeline.
+ *
+ * \param *instance		Pointer to the file set to start from.
+ * \param *list			Poiuter to the head of the linked list of file
+ * \return			Pointer to the next instance, or NULL.
+ */
+
+struct file_set_block *file_set_find_next_object(struct file_set_block *instance, struct file_set_block *list);
 
 /**
  * Return the details of a file instance required for redraw, for a specific

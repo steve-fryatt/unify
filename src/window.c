@@ -316,12 +316,12 @@ struct window_instance *window_create_instance(struct window_definition *definit
 
 	/* Allocate the flex blocks. */
 
-	if (!flexutils_allocate((void **) &(instance->known_objects), sizeof(struct window_object *), instance->object_space)) {
+	if (!flexutils_allocate((void **) &(instance->known_objects), sizeof(struct window_object), instance->object_space)) {
 		window_delete_instance(instance);
 		return NULL;
 	}
 
-	if (!flexutils_allocate((void **) &(instance->active_folds), sizeof(struct window_fold *), instance->fold_space)) {
+	if (!flexutils_allocate((void **) &(instance->active_folds), sizeof(struct window_fold), instance->fold_space)) {
 		window_delete_instance(instance);
 		return NULL;
 	}
@@ -487,6 +487,26 @@ static void window_toolbar_click_handler(wimp_pointer *pointer)
 		return;
 
 	switch (pointer->i) {
+	case WINDOW_TOOLBAR_ICON_BACK:
+		if (instance->definition->callback_navigate != NULL)
+			instance->definition->callback_navigate(WINDOW_NAVIGATION_TARGET_BACK, instance->client_data);
+		break;
+	case WINDOW_TOOLBAR_ICON_FORWARD:
+		if (instance->definition->callback_navigate != NULL)
+			instance->definition->callback_navigate(WINDOW_NAVIGATION_TARGET_FORWARD, instance->client_data);
+		break;
+	case WINDOW_TOOLBAR_ICON_LATEST:
+		if (instance->definition->callback_navigate != NULL)
+			instance->definition->callback_navigate(WINDOW_NAVIGATION_TARGET_LATEST, instance->client_data);
+		break;
+	case WINDOW_TOOLBAR_ICON_RUN:
+		if (instance->definition->callback_run == NULL)
+			break;
+		if (pointer->buttons == wimp_CLICK_SELECT)
+			instance->definition->callback_run(FALSE, instance->client_data);
+		else if (pointer->buttons == wimp_CLICK_ADJUST)
+			instance->definition->callback_run(TRUE, instance->client_data);
+		break;
 	case WINDOW_TOOLBAR_ICON_EXPAND:
 		window_expand_contract_all_folds(instance, TRUE);
 		break;
@@ -809,9 +829,11 @@ static void window_position_toolbar_icons(wimp_open *open, struct window_instanc
  *
  * \param *instance		Pointer to the window instance to be updated.
  * \param time			The timestamp of the new content.
+ * \param relation		The relationship of the new data to any other
+ *				content.
  */
 
-void window_start_new_content(struct window_instance *instance, uint64_t time)
+void window_start_new_content(struct window_instance *instance, uint64_t time, enum window_content_relation relation)
 {
 	if (instance == NULL)
 		return;
@@ -829,6 +851,17 @@ void window_start_new_content(struct window_instance *instance, uint64_t time)
 
 	date_time_write_standard_string(time, instance->date_field, WINDOW_DATE_FIELD_LEN);
 	wimp_set_icon_state(instance->pane_handle, WINDOW_TOOLBAR_ICON_DATE, 0, 0);
+
+	/* Shade any toolbar icons. */
+
+	icons_set_shaded(instance->pane_handle, WINDOW_TOOLBAR_ICON_BACK,
+			(relation & WINDOW_CONTENT_RELATION_LAST) ? TRUE : FALSE);
+
+	icons_set_shaded(instance->pane_handle, WINDOW_TOOLBAR_ICON_FORWARD,
+			(relation & WINDOW_CONTENT_RELATION_FIRST) ? TRUE : FALSE);
+
+	icons_set_shaded(instance->pane_handle, WINDOW_TOOLBAR_ICON_LATEST,
+			(relation & WINDOW_CONTENT_RELATION_FIRST) ? TRUE : FALSE);
 }
 
 /**
@@ -864,15 +897,14 @@ unsigned window_add_new_fold(struct window_instance *instance, unsigned id, int 
 			while (new_space <= instance->object_count)
 				new_space += WINDOW_ALLOCATION_UNIT;
 
-			if (flexutils_resize((void **) &(instance->known_objects), sizeof(struct window_object *), new_space))
+			if (flexutils_resize((void **) &(instance->known_objects), sizeof(struct window_object), new_space))
 				instance->object_space = new_space;
 		}
 
 		if (instance->object_count >= instance->object_space)
 			return WINDOW_NULL_FOLD;
 
-		id = instance->object_count;
-		instance->object_count++;
+		id = instance->object_count++;
 
 		instance->known_objects[id].expanded = FALSE;
 		instance->known_objects[id].line = WINDOW_NULL_FOLD;
@@ -896,7 +928,7 @@ unsigned window_add_new_fold(struct window_instance *instance, unsigned id, int 
 		while (new_space <= instance->fold_count)
 			new_space += WINDOW_ALLOCATION_UNIT;
 
-		if (flexutils_resize((void **) &(instance->active_folds), sizeof(struct window_fold *), new_space))
+		if (flexutils_resize((void **) &(instance->active_folds), sizeof(struct window_fold), new_space))
 			instance->fold_space = new_space;
 	}
 
@@ -929,12 +961,11 @@ void window_finish_new_content(struct window_instance *instance)
 	if (instance == NULL)
 		return;
 
-	int entries = 0;
-
 	window_recalculate_display_lines(instance);
 	window_set_extent(instance);
+	windows_redraw(instance->handle);
 
-	debug_printf("Finish new window content; extent = %d entries.", entries);
+	debug_printf("Finish new window content.");
 }
 
 /**

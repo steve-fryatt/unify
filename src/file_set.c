@@ -241,7 +241,7 @@ static osbool file_set_add_object(struct file_set_block *instance, struct file_i
 		while (new_space <= instance->object_count)
 			new_space += FILE_SET_ALLOCATION_UNIT;
 
-		if (flexutils_resize((void **) &(instance->objects), sizeof(struct file_set_object *), new_space))
+		if (flexutils_resize((void **) &(instance->objects), sizeof(struct file_instance_block *), new_space))
 			instance->object_space = new_space;
 	}
 
@@ -266,12 +266,57 @@ void file_set_add_to_window(struct file_set_block *instance, struct window_insta
 	if (instance == NULL || window == NULL)
 		return;
 
-	window_start_new_content(window, instance->timestamp);
+	enum window_content_relation relation = WINDOW_CONTENT_RELATION_NONE;
+
+	if (instance->previous == NULL)
+		relation |= WINDOW_CONTENT_RELATION_LAST;
+
+	if (suite_file_set_is_first(instance->parent, instance))
+		relation |= WINDOW_CONTENT_RELATION_FIRST;
+
+	window_start_new_content(window, instance->timestamp, relation);
 
 	for (int i = 0; i < instance->object_count; i++)
 		file_instance_add_to_window(instance->objects[i], window);
 
 	window_finish_new_content(window);
+}
+
+/**
+ * Given a file set instance, find the previous instance in the timeline.
+ *
+ * \param *instance		Pointer to the file set to start from.
+ * \return			Pointer to the previous instance, or NULL.
+ */
+
+struct file_set_block *file_set_find_previous_object(struct file_set_block *instance)
+{
+	if (instance == NULL)
+		return NULL;
+
+	return instance->previous;
+}
+
+/**
+ * Given a file set instance, find the next instance in the timeline.
+ *
+ * \param *instance		Pointer to the file set to start from.
+ * \param *list			Poiuter to the head of the linked list of file
+ * \return			Pointer to the next instance, or NULL.
+ */
+
+struct file_set_block *file_set_find_next_object(struct file_set_block *instance, struct file_set_block *list)
+{
+	if (instance == NULL || list == NULL)
+		return NULL;
+
+	while (list != NULL && list->previous != instance)
+		list = list->previous;
+
+	if (list == NULL || list->previous != instance)
+		return NULL;
+
+	return list;
 }
 
 /**
@@ -413,8 +458,8 @@ static void file_set_find_objects(struct file_set_block *instance, enum file_set
 
 				/* Now look for a previous instance */
 
-				if (file == NULL && instance->previous != NULL) // TODO - This should be unless full refresh.
-					file = file_set_find_object(instance->previous, clean_name, entry);
+	//			if (file == NULL && instance->previous != NULL) // TODO - This should be unless full refresh.
+	//				file = file_set_find_object(instance->previous, clean_name, entry);
 
 				/* If the file doesn't exist, create a new instance. */
 
