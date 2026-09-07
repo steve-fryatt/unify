@@ -126,7 +126,14 @@ struct file_set_block {
 	 */
 	struct file_instance_block **objects;
 
+	/**
+	 * The space allocated to objects in the object list.
+	 */
 	size_t object_space;
+
+	/**
+	 * The number of objects in the object list.
+	 */
 	size_t object_count;
 };
 

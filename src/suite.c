@@ -398,6 +398,14 @@ static void suite_close_handler(void *data)
 	suite_delete_instance(instance);
 }
 
+/**
+ * Handle navigation events from an instance window.
+ *
+ * \param target	The navigation target.
+ * \param *data		Pointer to our client data, which should be a
+ *			pointer to an instance.
+ */
+
 static void suite_navigation_handler(enum window_navigation_target target, void *data)
 {
 	struct suite_block *instance = data;

@@ -126,6 +126,9 @@ struct file_instance_block {
 	 */
 	unsigned window_object;
 
+	/**
+	 * The pass, fail or error status of the file instance.
+	 */
 	enum file_instance_status status;
 };
 
@@ -135,7 +138,6 @@ struct file_instance_block {
 /* Static function prototypes. */
 
 static void file_instance_update_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry);
-
 static osbool file_instance_scan_source(char *filename);
 static osbool file_instance_scan_block(FILE *fh, int level);
 static osbool file_instance_found_definition(FILE *fh);
@@ -291,16 +293,27 @@ osbool file_instance_compare_object(struct file_instance_block *instance, char *
 	return FALSE;
 }
 
+/**
+ * TODO
+ */
 
 void file_instance_add_source_file(struct file_instance_block *instance, osgbpb_info *entry)
 {
 	file_instance_update_file(instance->parent, &(instance->source), entry);
 }
 
+/**
+ * TODO
+ */
+
 void file_instance_add_executable_file(struct file_instance_block *instance, osgbpb_info *entry)
 {
 	file_instance_update_file(instance->parent, &(instance->executable), entry);
 }
+
+/**
+ * TODO
+ */
 
 static void file_instance_update_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry)
 {
@@ -315,6 +328,10 @@ static void file_instance_update_file(struct suite_block *parent, struct file_in
 		details->timestamp = 0;
 	}
 }
+
+/**
+ * TODO
+ */
 
 void file_instance_validate_files(struct file_instance_block *instance)
 {
@@ -343,6 +360,9 @@ void file_instance_validate_files(struct file_instance_block *instance)
 
 
 
+/**
+ * TODO
+ */
 
 static osbool file_instance_scan_source(char *filename)
 {
@@ -356,6 +376,10 @@ static osbool file_instance_scan_source(char *filename)
 
 	return result;
 }
+
+/**
+ * TODO
+ */
 
 static osbool file_instance_scan_block(FILE *fh, int level)
 {
@@ -416,6 +440,10 @@ static osbool file_instance_scan_block(FILE *fh, int level)
 	return TRUE;
 }
 
+/**
+ * TODO
+ */
+
 static osbool file_instance_found_definition(FILE *fh)
 {
 	char buffer[256], *b = buffer;
@@ -436,6 +464,10 @@ static osbool file_instance_found_definition(FILE *fh)
 	return (c == '(') ? TRUE : FALSE;
 }
 
+/**
+ * TODO
+ */
+
 static osbool file_instance_found_call(FILE *fh)
 {
 	char buffer[256], *b = buffer;
@@ -455,6 +487,10 @@ static osbool file_instance_found_call(FILE *fh)
 
 	return (c == ')') ? TRUE : FALSE;
 }
+
+/**
+ * TODO
+ */
 
 osbool file_instance_execute(struct file_instance_block *instance)
 {
@@ -478,8 +514,9 @@ osbool file_instance_execute(struct file_instance_block *instance)
 //	return (error == NULL) ? TRUE : FALSE;
 }
 
-
-
+/**
+ * TODO
+ */
 
 static osbool file_instance_task_window_ego(wimp_message *message)
 {
@@ -489,12 +526,19 @@ static osbool file_instance_task_window_ego(wimp_message *message)
 	return TRUE;
 }
 
+/**
+ * TODO
+ */
+
 static osbool file_instance_task_window_morio(wimp_message *message)
 {
 	debug_printf("Message_TaskWindowMorio");
 	return TRUE;
 }
 
+/**
+ * TODO
+ */
 
 static osbool file_instance_task_window_output(wimp_message *message)
 {
