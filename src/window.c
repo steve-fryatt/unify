@@ -609,6 +609,14 @@ static void window_redraw_handler(wimp_draw *redraw)
 						break;
 					}
 
+					if (content.faded) {
+						name_icon->flags = (name_icon->flags & ~wimp_ICON_FG_COLOUR) |
+								(wimp_COLOUR_MID_DARK_GREY << wimp_ICON_FG_COLOUR_SHIFT);
+					} else {
+						name_icon->flags = (name_icon->flags & ~wimp_ICON_FG_COLOUR) |
+								(wimp_COLOUR_BLACK << wimp_ICON_FG_COLOUR_SHIFT);
+					}
+
 					string_printf(detail_buffer, WINDOW_DETAIL_BUFFER_LEN, "%d/%d", content.count, content.total);
 
 					/* Vary the line layout depending on whether or not this is fold. */
@@ -623,6 +631,14 @@ static void window_redraw_handler(wimp_draw *redraw)
 						} else {
 							string_copy(expand_icon->data.sprite, "contract", 12);
 							expand_icon->flags |= wimp_ICON_SHADED;
+						}
+
+						if (content.faded) {
+							detail_icon->flags = (detail_icon->flags & ~wimp_ICON_FG_COLOUR) |
+									(wimp_COLOUR_MID_DARK_GREY << wimp_ICON_FG_COLOUR_SHIFT);
+						} else {
+							detail_icon->flags = (detail_icon->flags & ~wimp_ICON_FG_COLOUR) |
+									(wimp_COLOUR_BLACK << wimp_ICON_FG_COLOUR_SHIFT);
 						}
 
 						wimp_plot_icon(expand_icon);

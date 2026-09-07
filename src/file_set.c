@@ -86,6 +86,12 @@
 #define FILE_SET_OS_GBPB_MAX_READ 100
 
 /**
+ * A suitable array index hasn't been found.
+ */
+
+#define FILE_SET_NOT_FOUND ((unsigned) 0xffffffffu)
+
+/**
  * The types of file which exist in a set.
  */
 
@@ -118,7 +124,6 @@ struct file_set_block {
 	/**
 	 * The timestamp when the file set was created.
 	 */
-
 	uint64_t timestamp;
 
 	/**
@@ -142,9 +147,9 @@ struct file_set_block {
 
 /* Static function prototypes. */
 
-static osbool file_set_add_object(struct file_set_block *instance, struct file_instance_block *object);
-static void file_set_find_objects(struct file_set_block *instance, enum file_set_type type);
-static struct file_instance_block *file_set_find_object(struct file_set_block *instance, char *clean_name, osgbpb_info *entry);
+static unsigned file_set_add_object(struct file_set_block *instance, struct file_instance_block *object);
+static void file_set_find_objects(struct file_set_block *instance, enum file_set_type type, osbool all_new);
+static unsigned file_set_find_object(struct file_set_block *instance, char *clean_name, osgbpb_info *entry);
 
 
 /**
@@ -154,10 +159,12 @@ static struct file_instance_block *file_set_find_object(struct file_set_block *i
  * \param *parent		Pointer to the parent test suite.
  * \param *previous		Pointer to the previous file set in the parent
  *				test suite, or NULL if this is the first.
+ * \param full			TRUE if the new instance should be a full run;
+ *				otherwise it will just contain incremental changes.
  * \return			Pointer to the new file set, or NULL on failure.
  */
 
-struct file_set_block *file_set_create_instance(struct suite_block *parent, struct file_set_block *previous)
+struct file_set_block *file_set_create_instance(struct suite_block *parent, struct file_set_block *previous, osbool full)
 {
 	/* Allocate the instance memory and fill the data. */
 
@@ -182,8 +189,8 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 
 	/* Find the files, first searching for sources and then executables. */
 
-	file_set_find_objects(new, FILE_SET_TYPE_SOURCE);
-	file_set_find_objects(new, FILE_SET_TYPE_EXECUTABLE);
+	file_set_find_objects(new, FILE_SET_TYPE_SOURCE, full);
+	file_set_find_objects(new, FILE_SET_TYPE_EXECUTABLE, full);
 
 	debug_printf("\\kNew file set done!");
 	char timebuf[128];
@@ -234,13 +241,13 @@ struct file_set_block *file_set_delete_instance(struct file_set_block *instance)
  * \param *instance		Pointer to the file set instance to take
  *				the object.
  * \param *object		Pointer to the object to be added.
- * \return			TRUE if successful; else FALSE.
+ * \return			The index of the new object, or FILE_SET_NOT_FOUND.
  */
 
-static osbool file_set_add_object(struct file_set_block *instance, struct file_instance_block *object)
+static unsigned file_set_add_object(struct file_set_block *instance, struct file_instance_block *object)
 {
 	if (instance == NULL)
-		return FALSE;
+		return FILE_SET_NOT_FOUND;
 
 	if (instance->object_count >= instance->object_space) {
 		size_t new_space = instance->object_space;
@@ -253,11 +260,11 @@ static osbool file_set_add_object(struct file_set_block *instance, struct file_i
 	}
 
 	if (instance->object_count >= instance->object_space)
-		return FALSE;
+		return FILE_SET_NOT_FOUND;
 
-	instance->objects[instance->object_count++] = object;
+	instance->objects[instance->object_count] = object;
 
-	return TRUE;
+	return instance->object_count++;
 }
 
 /**
@@ -345,7 +352,7 @@ osbool file_set_get_object_line_details(struct file_set_block *instance, int lin
 	if (line < 0 || line >= instance->object_count)
 		return FALSE;
 
-	return file_instance_get_line_details(instance->objects[line], details);
+	return file_instance_get_line_details(instance->objects[line], instance, details);
 }
 
 /**
@@ -357,9 +364,10 @@ osbool file_set_get_object_line_details(struct file_set_block *instance, int lin
  *
  * \param *instance		Pointer to the file set instance to be populated.
  * \param type			The type of file to be searched for.
+ * \param all_new		TRUE if all objects should be created new.
  */
 
-static void file_set_find_objects(struct file_set_block *instance, enum file_set_type type)
+static void file_set_find_objects(struct file_set_block *instance, enum file_set_type type, osbool all_new)
 {
 	if (instance == NULL)
 		return;
@@ -456,47 +464,58 @@ static void file_set_find_objects(struct file_set_block *instance, enum file_set
 
 				debug_printf("Found %s at %s.%s", clean_name, folder, entry->name);
 
-				struct file_instance_block *file = NULL;
-
 				/* For executables, check to see if we already have a corresponding source file. */
 
+				unsigned file_index = FILE_SET_NOT_FOUND;
+
 				if (type == FILE_SET_TYPE_EXECUTABLE)
-					file = file_set_find_object(instance, clean_name, entry);
+					file_index = file_set_find_object(instance, clean_name, entry);
 
 				/* Now look for a previous instance */
 
-	//			if (file == NULL && instance->previous != NULL) // TODO - This should be unless full refresh.
-	//				file = file_set_find_object(instance->previous, clean_name, entry);
+				if (file_index == FILE_SET_NOT_FOUND && instance->previous != NULL && all_new == FALSE) {
+					debug_printf("Looking for a previous instance...");
+					unsigned index = file_set_find_object(instance->previous, clean_name, entry);
+
+					/* Use this old file instance for now, unless it has a source file and we're
+					 * searching for executables (because if we are, and we get here, there can't
+					 * have been a source file found).
+					 */
+
+					if (index != FILE_SET_NOT_FOUND &&
+							!(type == FILE_SET_TYPE_EXECUTABLE &&
+							file_instance_has_source(instance->previous->objects[index]))) {
+						file_index = file_set_add_object(instance, instance->previous->objects[index]);
+						debug_printf("Found pre-existing file instance to re-use.");
+					}
+				}
 
 				/* If the file doesn't exist, create a new instance. */
 
-				if (file == NULL) {
-					file = file_instance_create_instance(instance->parent, instance, clean_name);
+				if (file_index == FILE_SET_NOT_FOUND) {
+					struct file_instance_block *file = file_instance_create_instance(instance->parent, instance, clean_name);
 					debug_printf("Creating new file instance 0x%x", file);
 					if (file != NULL)
-						file_set_add_object(instance, file);
+						file_index = file_set_add_object(instance, file);
 				} else {
-					debug_printf("Reusing existing file instance 0x%x", file);
+					debug_printf("Reusing existing file instance 0x%x", instance->objects[file_index]);
 				}
+
+				/* Now try to add the file to the instance that we found. This may update
+				 * the instance if the current file is found to be incompatible with the
+				 * existing file details.
+				 */
 
 				switch (type) {
 				case FILE_SET_TYPE_SOURCE:
-					file_instance_add_source_file(file, entry);
+					instance->objects[file_index] = file_instance_add_source_file(instance->objects[file_index], instance, entry);
 					break;
 				case FILE_SET_TYPE_EXECUTABLE:
-					file_instance_add_executable_file(file, entry);
+					instance->objects[file_index] = file_instance_add_executable_file(instance->objects[file_index], instance, entry);
 					break;
 				default:
 					break;
 				}
-
-				// Merge flags as required.
-				// If required, add in as an object. How do we know? Search for existing??
-				// On the executable pass, how do we remove a now invalid previous that matched
-				// on the source test???
-
-
-
 			}
 		}
 	} while (error == NULL && context != -1);
@@ -504,21 +523,23 @@ static void file_set_find_objects(struct file_set_block *instance, enum file_set
 
 /**
  * Given some file details read from the disc, see if we already have a file
- * instance in out collection which might match it.
+ * instance in our collection which might match it and return the index into
+ * the objects array,
  *
  * \param *instance		Pointer to the file set instance to be searched.
+ * \return			The index of the match, or FILE_SET_NOT_FOUND.
  *
  */
 
-static struct file_instance_block *file_set_find_object(struct file_set_block *instance, char *clean_name, osgbpb_info *entry)
+static unsigned file_set_find_object(struct file_set_block *instance, char *clean_name, osgbpb_info *entry)
 {
 	if (instance == NULL || instance->objects == NULL)
-		return NULL;
+		return FILE_SET_NOT_FOUND;
 
-	for (int i = 0; i < instance->object_count; i++) {
+	for (unsigned i = 0; i < instance->object_count; i++) {
 		if (file_instance_compare_object(instance->objects[i], clean_name, entry))
-			return instance->objects[i];
+			return i;
 	}
 
-	return NULL;
+	return FILE_SET_NOT_FOUND;
 }

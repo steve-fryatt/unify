@@ -98,6 +98,7 @@ struct window_line {
 	char *text;				/**< The text for the line.		*/
 	int count;				/**< The line count, for suite entries.	*/
 	int total;				/**< The line total, for suite entries.	*/
+	osbool faded;				/**< Should the line be shown faded?	*/
 };
 
 /**

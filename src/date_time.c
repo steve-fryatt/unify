@@ -38,6 +38,7 @@
 /* OSLib header files */
 
 #include <oslib/os.h>
+#include <oslib/osgbpb.h>
 #include <oslib/osword.h>
 #include <oslib/territory.h>
 #include <oslib/types.h>
@@ -76,6 +77,24 @@ uint64_t date_time_read_current_time(void)
 	debug_printf("Read time: %" PRId64, time);
 
 	return time;
+}
+
+/**
+ * Given an OS_GBPB data block, extract the timestamp for the file.
+ *
+ * \param *entry	Pointer to the OS_GBPB block to read from.
+ * \return		The object timestamp, or 0 on error.
+ */
+
+uint64_t date_time_read_osgbpb_timestamp(osgbpb_info *entry)
+{
+	if (entry == NULL)
+		return 0;
+
+	if ((entry->load_addr & 0xfff00000u) != 0xfff00000u)
+		return 0;
+
+	return ((uint64_t) entry->exec_addr) | ((uint64_t) (entry->load_addr & 0xffu) << 32);
 }
 
 /**

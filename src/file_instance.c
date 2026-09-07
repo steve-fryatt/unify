@@ -29,6 +29,7 @@
 
 /* ANSI C header files */
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <ctype.h>
@@ -55,6 +56,7 @@
 
 #include "file_instance.h"
 
+#include "date_time.h"
 #include "file_set.h"
 #include "main.h"
 #include "suite.h"
@@ -78,6 +80,11 @@ struct file_instance_details {
 	 * Text dump offset to the name of the file.
 	 */
 	unsigned name;
+
+	/**
+	 * The size of the file as recorded in the instance.
+	 */
+	int size;
 
 	/**
 	 * The timestamp of the file as recorded in the instance.
@@ -137,7 +144,8 @@ struct file_instance_block {
 
 /* Static function prototypes. */
 
-static void file_instance_update_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry);
+static struct file_instance_block *file_instance_clone_instance(struct file_set_block *initial, struct file_instance_block *template, osbool use_source);
+static void file_instance_store_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry);
 static osbool file_instance_scan_source(char *filename);
 static osbool file_instance_scan_block(FILE *fh, int level);
 static osbool file_instance_found_definition(FILE *fh);
@@ -196,6 +204,40 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
 }
 
 /**
+ * TODO
+ */
+
+static struct file_instance_block *file_instance_clone_instance(struct file_set_block *initial, struct file_instance_block *template, osbool use_source)
+{
+	if (initial == NULL || template == NULL)
+		return NULL;
+
+	struct file_instance_block *new = heap_alloc(sizeof(struct file_instance_block));
+	if (new == NULL)
+		return NULL;
+
+	new->parent = template->parent;
+	new->initial = initial;
+	new->status = FILE_INSTANCE_STATUS_UNKNOWN;
+	new->source.name = (use_source == TRUE) ? template->source.name : TEXTDUMP_NULL;
+	new->source.size = (use_source == TRUE) ? template->source.size : 0;
+	new->source.timestamp = (use_source == TRUE) ? template->source.timestamp : 0;
+	new->executable.name = TEXTDUMP_NULL;
+	new->executable.size = 0;
+	new->executable.timestamp = 0;
+	new->window_object = template->window_object;
+
+	new->name = template->name;
+
+	new->next = suite_store_file_instance(template->parent, new);
+
+	debug_printf("Cloning new file instance 0x%x in suite 0x%x for %s",
+			new, template->parent, suite_get_textdump_base(template->parent) + new->name);
+
+	return new;
+}
+
+/**
  * Delete a Test File instance.
  *
  * NB: It is left up to the caller to do something sensible with any linked
@@ -249,20 +291,37 @@ void file_instance_add_to_window(struct file_instance_block *instance, struct wi
  * instance.
  *
  * \param *instance	Pointer to the instance of interest.
+ * \param *set		Pointer to the file set instance requesting the details.
  * \param *details	Pointer to a struct in which the details should be
  *			returned.
  * \return		TRUE if valid details were returned; else FALSE.
  */
 
-osbool file_instance_get_line_details(struct file_instance_block *instance, struct file_instance_line_details *details)
+osbool file_instance_get_line_details(struct file_instance_block *instance, struct file_set_block *set, struct file_instance_line_details *details)
 {
 	if (instance == NULL || details == NULL)
 		return FALSE;
 
 	details->name = instance->name;
 	details->status = instance->status;
+	details->is_new = (instance->initial == set) ? TRUE : FALSE;
 
 	return TRUE;
+}
+
+/**
+ * Report whether a file instance has a source file identified.
+ *
+ * \param *instance	Pointer to the instance of interest.
+ * \return		TRUE if a source file is specified; otherwise FALSE.
+ */
+
+osbool file_instance_has_source(struct file_instance_block *instance)
+{
+	if (instance == NULL)
+		return FALSE;
+
+	return (instance->source.name == TEXTDUMP_NULL) ? FALSE : TRUE;
 }
 
 /**
@@ -297,30 +356,102 @@ osbool file_instance_compare_object(struct file_instance_block *instance, char *
  * TODO
  */
 
-void file_instance_add_source_file(struct file_instance_block *instance, osgbpb_info *entry)
+struct file_instance_block *file_instance_add_source_file(struct file_instance_block *instance, struct file_set_block *set, osgbpb_info *entry)
 {
-	file_instance_update_file(instance->parent, &(instance->source), entry);
+	if (instance == NULL)
+		return NULL;
+
+	/* If this is a new instance, do some error checks. */
+
+	if (instance->initial == set) {
+		/* If there's already an error, bail out. */
+
+		if (instance->status != FILE_INSTANCE_STATUS_UNKNOWN)
+			return instance;
+
+		/* There shouldn't be a file already! */
+
+		if (instance->source.name != TEXTDUMP_NULL) {
+			instance->status = FILE_INSTANCE_STATUS_ERROR_DUPLICATE_SOURCE;
+			return instance;
+		}
+	}
+
+	/* Check the file details. The names should match, we hope! If the file appears
+	 * to have changed, create a new instance.
+	 */
+
+	uint64_t timestamp = date_time_read_osgbpb_timestamp(entry);
+
+	if (instance->source.name != TEXTDUMP_NULL) {
+		debug_printf("Testing the source file details...");
+		debug_printf("Existing time: %" PRId64 " New time: %"PRId64, instance->source.timestamp, timestamp);
+		if (instance->source.size == entry->size && instance->source.timestamp == timestamp)
+			return instance;
+
+		instance = file_instance_clone_instance(set, instance, FALSE);
+	}
+
+	file_instance_store_file(instance->parent, &(instance->source), entry);
+
+	return instance;
 }
 
 /**
  * TODO
  */
 
-void file_instance_add_executable_file(struct file_instance_block *instance, osgbpb_info *entry)
+struct file_instance_block *file_instance_add_executable_file(struct file_instance_block *instance, struct file_set_block *set, osgbpb_info *entry)
 {
-	file_instance_update_file(instance->parent, &(instance->executable), entry);
+	if (instance == NULL)
+		return NULL;
+
+	/* If this is a new instance, do some error checks. */
+
+	if (instance->initial == set) {
+		/* If there's already an error, bail out. */
+
+		if (instance->status != FILE_INSTANCE_STATUS_UNKNOWN)
+			return instance;
+
+		/* There shouldn't be a file already! */
+
+		if (instance->executable.name != TEXTDUMP_NULL) {
+			instance->status = FILE_INSTANCE_STATUS_ERROR_DUPLICATE_SOURCE;
+			return instance;
+		}
+	}
+
+	/* Check the file details. The names should match, we hope! If the file appears
+	 * to have changed, create a new instance.
+	 */
+
+	uint64_t timestamp = date_time_read_osgbpb_timestamp(entry);
+
+	if (instance->executable.name != TEXTDUMP_NULL) {
+		debug_printf("Testing the executable file details...");
+		if (instance->executable.size == entry->size && instance->executable.timestamp == timestamp)
+			return instance;
+
+		instance = file_instance_clone_instance(set, instance, TRUE);
+	}
+
+	file_instance_store_file(instance->parent, &(instance->executable), entry);
+
+	return instance;
 }
 
 /**
  * TODO
  */
 
-static void file_instance_update_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry)
+static void file_instance_store_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry)
 {
 	if (parent == NULL || details == NULL || entry == NULL)
 		return;
 
 	details->name = suite_store_text(parent, entry->name);
+	details->size = entry->size;
 
 	if ((entry->load_addr & 0xfff00000u) == 0xfff00000u) {
 		details->timestamp = entry->exec_addr | ((uint64_t) (entry->load_addr & 0xffu) << 32);

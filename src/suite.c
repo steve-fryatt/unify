@@ -196,7 +196,7 @@ osbool suite_create_instance(char *folder)
 
 	/* Load the first file set from the folder. */
 
-	new->file_sets = file_set_create_instance(new, new->file_sets);
+	new->file_sets = file_set_create_instance(new, new->file_sets, TRUE);
 
 	/* Update the window for the new set. */
 
@@ -448,7 +448,7 @@ static void suite_run_handler(osbool full, void *data)
 	if (instance == NULL)
 		return;
 
-	instance->file_sets = file_set_create_instance(instance, instance->file_sets);
+	instance->file_sets = file_set_create_instance(instance, instance->file_sets, full);
 
 	/* Update the window for the new set. */
 
@@ -505,6 +505,7 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 
 		content->count = 0;
 		content->total = 100;
+		content->faded = !line_details.is_new;
 	} else {
 		content->text = "This is a line";
 		content->status = WINDOW_STATUS_UNKNOWN;

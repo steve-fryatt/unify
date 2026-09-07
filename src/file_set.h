@@ -35,6 +35,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <oslib/types.h>
 
 /**
  * A File Set instance.
@@ -52,10 +53,12 @@ struct file_set_block;
  * \param *parent		Pointer to the parent test suite.
  * \param *previous		Pointer to the previous file set in the parent
  *				test suite, or NULL if this is the first.
+ * \param full			TRUE if the new instance should be a full run;
+ *				otherwise it will just contain incremental changes.
  * \return			Pointer to the new file set, or NULL on failure.
  */
 
-struct file_set_block *file_set_create_instance(struct suite_block *parent, struct file_set_block *previous);
+struct file_set_block *file_set_create_instance(struct suite_block *parent, struct file_set_block *previous, osbool full);
 
 /**
  * Destroy a file set instance.

@@ -44,6 +44,8 @@ enum file_instance_status {
 	FILE_INSTANCE_STATUS_ERROR_NO_FILES,		/**< Neither source nor executable found.	*/
 	FILE_INSTANCE_STATUS_ERROR_NO_SOURCE,		/**< Source file is missing, only executable.	*/
 	FILE_INSTANCE_STATUS_ERROR_NO_EXECUTABLE,	/**< Executable file is missing, only source.	*/
+	FILE_INSTANCE_STATUS_ERROR_DUPLICATE_SOURCE,	/**< There was already a source.		*/
+	FILE_INSTANCE_STATUS_ERROR_DUPLICATE_EXECUTABLE,/**< There was already an executable.		*/
 	FILE_INSTANCE_STATUS_ERROR_BAD_FILES		/**< Can't work out the file state.		*/
 };
 
@@ -54,6 +56,7 @@ enum file_instance_status {
 struct file_instance_line_details {
 	unsigned name;
 	enum file_instance_status status;
+	osbool is_new;
 };
 
 /**
@@ -114,12 +117,22 @@ void file_instance_add_to_window(struct file_instance_block *instance, struct wi
  * instance.
  *
  * \param *instance	Pointer to the instance of interest.
+ * \param *set		Pointer to the file set instance requesting the details.
  * \param *details	Pointer to a struct in which the details should be
  *			returned.
  * \return		TRUE if valid details were returned; else FALSE.
  */
 
-osbool file_instance_get_line_details(struct file_instance_block *instance, struct file_instance_line_details *details);
+osbool file_instance_get_line_details(struct file_instance_block *instance, struct file_set_block *set, struct file_instance_line_details *details);
+
+/**
+ * Report whether a file instance has a source file identified.
+ *
+ * \param *instance	Pointer to the instance of interest.
+ * \return		TRUE if a source file is specified; otherwise FALSE.
+ */
+
+osbool file_instance_has_source(struct file_instance_block *instance);
 
 /**
  * Compare the details of an object found on disc with those stored in a
@@ -134,14 +147,27 @@ osbool file_instance_get_line_details(struct file_instance_block *instance, stru
 
 osbool file_instance_compare_object(struct  file_instance_block *instance, char *clean_name, osgbpb_info *entry);
 
+/**
+ * TODO
+ */
 
+struct file_instance_block *file_instance_add_source_file(struct file_instance_block *instance, struct file_set_block *set, osgbpb_info *entry);
 
+/**
+ * TODO
+ */
 
-void file_instance_add_source_file(struct file_instance_block *instance, osgbpb_info *entry);
-void file_instance_add_executable_file(struct file_instance_block *instance, osgbpb_info *entry);
+struct file_instance_block *file_instance_add_executable_file(struct file_instance_block *instance, struct file_set_block *set, osgbpb_info *entry);
+
+/**
+ * TODO
+ */
 
 void file_instance_validate_files(struct file_instance_block *instance);
 
+/**
+ * TODO
+ */
 
 osbool file_instance_execute(struct file_instance_block *instance);
 

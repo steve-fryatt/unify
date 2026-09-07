@@ -32,6 +32,7 @@
 
 #include <stddef.h>
 #include <stdlib.h>
+#include <oslib/osgbpb.h>
 
 /**
  * Return the current UTC time.
@@ -40,6 +41,15 @@
  */
 
 uint64_t date_time_read_current_time(void);
+
+/**
+ * Given an OS_GBPB data block, extract the timestamp for the file.
+ *
+ * \param *entry	Pointer to the OS_GBPB block to read from.
+ * \return		The object timestamp, or 0 on error.
+ */
+
+uint64_t date_time_read_osgbpb_timestamp(osgbpb_info *entry);
 
 /**
  * Given a date and time, write a textual version into the supplied buffer.
