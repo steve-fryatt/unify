@@ -400,6 +400,8 @@ struct window_instance *window_create_instance(struct window_definition *definit
 		return NULL;
 	}
 
+	/* Register the window details */
+
 	ihelp_add_window(instance->handle, "ListWindow", window_decode_interactive_help);
 
 	event_add_window_user_data(instance->handle, instance);
@@ -426,9 +428,7 @@ struct window_instance *window_create_instance(struct window_definition *definit
 
 	/* Open the windows. */
 
-	wimp_window_state window;
-
-	window.w = instance->handle;
+	wimp_window_state window = { .w = instance->handle };
 	wimp_get_window_state(&window);
 	window_recalculate_columns(instance, (wimp_open *) &window);
 	window.next = wimp_TOP;
