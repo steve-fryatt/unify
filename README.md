@@ -6,7 +6,7 @@ Run Unity Unit Tests on RISC OS.
 Introduction
 ------------
 
-Unify is tool for running unit tests created in [Unity](https://www.throwtheswitch.org/unity) from https://www.throwtheswitch.org on RISC OS. The intended target are test suites with the structure used in the C applications found on [SFTools build environment](https://github.com/steve-fryatt), although it may be possible to extend it to use other project structures as well.
+Unify is tool for running unit tests created in [Unity](https://www.throwtheswitch.org/unity) from https://www.throwtheswitch.org on RISC OS. The intended target are test suites with the structure used in the C applications found in the [SFTools build environment](https://github.com/steve-fryatt), although it may be possible to extend it to use other project structures as well.
 
 
 Building
