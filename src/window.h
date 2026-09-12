@@ -164,7 +164,7 @@ void window_initialise(osspriteop_area *sprites);
 /**
  * Create a new window instance.
  *
- * \param *pane_definition	Pointer to the window definition.
+ * \param *definition		Pointer to the window definition.
  * \param *client_data		Pointer to the client data, or NULL for none.
  * \return			Pointer to the new instance, or NULL on failure.
  */
