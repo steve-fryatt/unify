@@ -49,6 +49,7 @@
 #include <sflib/ihelp.h>
 #include <sflib/msgs.h>
 #include <sflib/resources.h>
+#include <sflib/saveas.h>
 #include <sflib/string.h>
 #include <sflib/tasks.h>
 #include <sflib/templates.h>
@@ -60,6 +61,7 @@
 
 #include "file_dialogue.h"
 #include "iconbar.h"
+#include "log.h"
 #include "suite.h"
 #include "file_instance.h"
 #include "window.h"
@@ -231,11 +233,13 @@ static void main_initialise(void)
 
 	/* Initialise the individual modules. */
 
+	saveas_initialise("SaveAs", NULL);
 	dataxfer_initialise(main_task_handle, &main_memory_handlers);
 	ihelp_initialise();
 	url_initialise();
 
 	window_initialise(sprites);
+	log_initialise();
 	file_dialogue_initialise();
 	iconbar_initialise();
 	file_instance_initialise();

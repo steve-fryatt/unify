@@ -58,6 +58,7 @@
 
 #include "date_time.h"
 #include "file_set.h"
+#include "log.h"
 #include "main.h"
 #include "suite.h"
 #include "textdump.h"
@@ -134,6 +135,11 @@ struct file_instance_block {
 	unsigned window_object;
 
 	/**
+	 * The log data associated with the file.
+	 */
+	struct log_instance *log;
+
+	/**
 	 * The pass, fail or error status of the file instance.
 	 */
 	enum file_instance_status status;
@@ -189,6 +195,7 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
 	new->source.name = TEXTDUMP_NULL;
 	new->executable.name = TEXTDUMP_NULL;
 	new->window_object = WINDOW_NULL_FOLD;
+	new->log = NULL;
 
 	new->name = suite_store_text(parent, name);
 	if (new->name == TEXTDUMP_NULL) {
@@ -226,6 +233,7 @@ static struct file_instance_block *file_instance_clone_instance(struct file_set_
 	new->executable.size = 0;
 	new->executable.timestamp = 0;
 	new->window_object = template->window_object;
+	new->log = NULL;
 
 	new->name = template->name;
 
@@ -258,6 +266,9 @@ struct file_instance_block *file_instance_delete_instance(struct file_instance_b
 	struct file_instance_block *next = instance->next;
 
 	/* Free the memory associated with the instance. */
+
+	if (instance->log != NULL)
+		log_delete_instance(instance->log);
 
 	heap_free(instance);
 
@@ -329,6 +340,7 @@ osbool file_instance_get_object_details(struct file_instance_block *instance, st
 	details->source_timestamp = instance->source.timestamp;
 	details->executable_filename = instance->executable.name;
 	details->executable_timestamp = instance->executable.timestamp;
+	details->has_log = FALSE; // TODO
 
 	return TRUE;
 }
@@ -342,10 +354,36 @@ osbool file_instance_get_object_details(struct file_instance_block *instance, st
 
 osbool file_instance_has_source(struct file_instance_block *instance)
 {
-	if (instance == NULL)
+	return (instance == NULL || instance->source.name == TEXTDUMP_NULL) ? FALSE : TRUE;
+}
+
+/**
+ * Report whether a file instance has a log associated with it.
+ *
+ * \param *instance	Pointer to the instance of interest.
+ * \return		TRUE if a log is available; otherwise FALSE.
+ */
+
+osbool file_instance_has_log(struct file_instance_block *instance)
+{
+	return (instance == NULL || instance->log == NULL) ? FALSE : TRUE;
+}
+
+/**
+ * Open the log for a file instance.
+ *
+ * \param *instance	Pointer to the instance of intest.
+ * \return		TRUE if the log was opened; else FALSE.
+ */
+
+osbool file_instance_open_log(struct file_instance_block *instance)
+{
+	if (instance == NULL || instance->log == NULL)
 		return FALSE;
 
-	return (instance->source.name == TEXTDUMP_NULL) ? FALSE : TRUE;
+	log_open_window(instance->log);
+
+	return TRUE;
 }
 
 /**
@@ -510,6 +548,9 @@ void file_instance_validate_files(struct file_instance_block *instance)
 	default:
 		break;
 	}
+
+	if (instance->status == FILE_INSTANCE_STATUS_READY_TO_RUN) // TODO - Remove this!!!
+		instance->log = log_create_instance();
 }
 
 

@@ -338,7 +338,7 @@ struct file_set_block *file_set_find_next_object(struct file_set_block *instance
  * line from within the file set.
  *
  * \param *instance		Pointer to the file set instance of interest.
- * \param line			The line number from which to retiurn details.
+ * \param line			The line number from which to return details.
  * \param *details		Pointer to a structure in memory to hold the
  *				returned details.
  * \return			TRUE if successful; FALSE on error.
@@ -360,7 +360,7 @@ osbool file_set_get_line_details(struct file_set_block *instance, int line, stru
  * file set.
  *
  * \param *instance		Pointer to the file set instance of interest.
- * \param line			The line number from which to retiurn details.
+ * \param line			The line number from which to return details.
  * \param *details		Pointer to a structure in memory to hold the
  *				returned details.
  * \return			TRUE if successful; FALSE on error.
@@ -376,6 +376,44 @@ osbool file_set_get_object_details(struct file_set_block *instance, int line,
 		return FALSE;
 
 	return file_instance_get_object_details(instance->objects[line], details);
+}
+
+/**
+ * Check whether an entry in a file set instance has a log associated with it.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \param line			The line number from which to return details.
+ * \return			TRUE if a log exists; else FALSE.
+ */
+
+osbool file_set_get_object_log(struct file_set_block *instance, int line)
+{
+	if (instance == NULL || instance->objects == NULL)
+		return FALSE;
+
+	if (line < 0 || line >= instance->object_count)
+		return FALSE;
+
+	return file_instance_has_log(instance->objects[line]);
+}
+
+/**
+ * Open a log for an entry in a file set instance.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \param line			The line number from which to open the log.
+ * \return			TRUE if a log was opened; else FALSE.
+ */
+
+osbool file_set_open_object_log(struct file_set_block *instance, int line)
+{
+	if (instance == NULL || instance->objects == NULL)
+		return FALSE;
+
+	if (line < 0 || line >= instance->object_count)
+		return FALSE;
+
+	return file_instance_open_log(instance->objects[line]);
 }
 
 /**

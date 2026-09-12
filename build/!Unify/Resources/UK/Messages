@@ -31,6 +31,9 @@ BadResource:Failed to locate suitable %0 file.
 BadTemplate:Window template '%0' not found.
 BadSprites:Failed to locate suitable application sprites file.
 
+DefLogFile:Log
+DefLogsFile:Logs
+
 #LogMenu:Logs
 
 #LogMessageSize:Message Size
@@ -79,11 +82,17 @@ Help.FileInfo.STime:\Ttimestamp of the source file at the time of this test run.
 Help.FileInfo.EName:\Tfilename of the executable file.
 Help.FileInfo.ETime:\Ttimestamp of the executable file at the time of this test run.
 
+Help.SaveAs:\Tfile save \w.
+Help.SaveAs.Icon3:Drag this icon to the directory display where the file is to be saved, or direct to another application.
+Help.SaveAs.Name:Enter a new filename, or full pathname, for the file here.
+Help.SaveAs.Save:\Ssave the file if there is a full pathname above.
+Help.SaveAs.Cancel:\Scancel the save.
+
 Help.ListMenu.00:\Rto perform actions on this test file.
 Help.ListMenu.0000:\Rsee details of this test file at the time of this test run.
 Help.ListMenu.0001:\Sview the log from the test run of this file.
-Help.ListMenu.0002:\Rsave the log data from this test run.
+Help.ListMenu.0002:\Rsave the log data from the test run of this file.
 Help.ListMenu.01:\Rto perform actions on this single test.
-Help.ListMenu.02:\Rto save the log data from this test run.
+Help.ListMenu.02:\Rto save all of the log data from the files in this test run.
 
 #Help.LogListMenu.??:\Sopen this log for analysis.

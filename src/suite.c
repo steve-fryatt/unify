@@ -127,6 +127,8 @@ static void suite_close_handler(void *data);
 static void suite_navigation_handler(enum window_navigation_target target, void *data);
 static void suite_run_handler(osbool full, void *data);
 static osbool suite_redraw_line_handler(int fold, int entry, struct window_line *content, void *data);
+static osbool suite_object_has_log(int fold, void *data);
+static void suite_object_open_log(int fold, void *data);
 static osbool suite_object_info_handler(int fold, struct file_dialogue_data *info, void *data);
 
 /* The Test Suite window definiton. */
@@ -136,6 +138,8 @@ static struct window_definition suite_window_definition = {
 	.callback_close = suite_close_handler,
 	.callback_redraw = suite_redraw_line_handler,
 	.callback_fileinfo = suite_object_info_handler,
+	.callback_file_has_log = suite_object_has_log,
+	.callback_open_log_viewer = suite_object_open_log,
 	.callback_navigate = suite_navigation_handler,
 	.callback_run = suite_run_handler
 };
@@ -513,6 +517,41 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 		content->status = WINDOW_STATUS_UNKNOWN;
 	}
 	return TRUE;
+}
+
+/**
+ * Handle log presence request events from an instance window.
+ *
+ * \param fold		The index of the fold containing the line.
+ * \param *data		Pointer to our client data, which should be a
+ *			pointer to an instance.
+ * \return		TRUE if a log exists; else FALSE.
+ */
+
+static osbool suite_object_has_log(int fold, void *data)
+{
+	struct suite_block *instance = data;
+	if (instance == NULL)
+		return FALSE;
+
+	return file_set_get_object_log(instance->current_file_set, fold);
+}
+
+/**
+ * Handle log open request events from an instance window.
+ *
+ * \param fold		The index of the fold containing the line.
+ * \param *data		Pointer to our client data, which should be a
+ *			pointer to an instance.
+ */
+
+static void suite_object_open_log(int fold, void *data)
+{
+	struct suite_block *instance = data;
+	if (instance == NULL)
+		return;
+
+	file_set_open_object_log(instance->current_file_set, fold);
 }
 
 /**

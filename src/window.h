@@ -126,6 +126,16 @@ struct window_definition {
 	osbool (*callback_fileinfo)(int fold, struct file_dialogue_data *info, void *data);
 
 	/**
+	 * Callback for requesting the presence of log data.
+	 */
+	osbool (*callback_file_has_log)(int fold, void *data);
+
+	/**
+	 * Callback to request that a log viewer is opened.
+	 */
+	void (*callback_open_log_viewer)(int fold, void *data);
+
+	/**
 	 * Callback for navigating around test runs.
 	 */
 	void (*callback_navigate)(enum window_navigation_target target, void *data);

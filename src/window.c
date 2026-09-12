@@ -43,6 +43,7 @@
 #include <oslib/colourtrans.h>
 #include <oslib/font.h>
 #include <oslib/os.h>
+#include <oslib/osfile.h>
 #include <oslib/osspriteop.h>
 #include <oslib/wimp.h>
 
@@ -55,6 +56,7 @@
 #include <sflib/icons.h>
 #include <sflib/ihelp.h>
 #include <sflib/menus.h>
+#include <sflib/saveas.h>
 #include <sflib/string.h>
 #include <sflib/templates.h>
 #include <sflib/windows.h>
@@ -237,6 +239,18 @@ static wimp_window *window_definition = NULL;
 static wimp_window *window_pane_definition = NULL;
 
 /**
+ * The Save As dialogue box for log files.
+ */
+
+static struct saveas_block *window_log_saveas_dialogue = NULL;
+
+/**
+ * The Save As dialogue box for log collection files.
+ */
+
+static struct saveas_block *window_logs_saveas_dialogue = NULL;
+
+/**
  * The window menu.
  */
 
@@ -323,6 +337,11 @@ void window_initialise(osspriteop_area *sprites)
 
 	window_menu = templates_get_menu("ListWindowMenu");
 	ihelp_add_menu(window_menu, "ListMenu");
+
+	/* Set up the Save As dialogue. */
+
+	window_log_saveas_dialogue = saveas_create_dialogue(FALSE, "file_fff", osfile_TYPE_TEXT, NULL);
+	window_logs_saveas_dialogue = saveas_create_dialogue(FALSE, "file_fff", osfile_TYPE_TEXT, NULL);
 }
 
 
@@ -598,10 +617,20 @@ static void window_menu_prepare(wimp_w w, wimp_menu *menu, wimp_pointer *pointer
 		}
 	}
 
+	saveas_initialise_dialogue(window_log_saveas_dialogue, NULL, "DefLogFile", NULL, FALSE, FALSE, instance);
+	saveas_initialise_dialogue(window_logs_saveas_dialogue, NULL, "DefLogsFile", NULL, FALSE, FALSE, instance);
+
+	osbool has_logs = (window_menu_fold == -1 || instance->definition->callback_file_has_log == NULL) ? TRUE :
+			(instance->definition->callback_file_has_log(window_menu_fold, instance->client_data));
+
 	menus_shade_entry(menu, WINDOW_MENU_FILE,
 			(window_menu_icon == wimp_ICON_WINDOW || window_menu_fold == -1) ? TRUE : FALSE);
 	menus_shade_entry(menu, WINDOW_MENU_TEST,
 			(window_menu_icon == wimp_ICON_WINDOW || window_menu_fold == -1 || window_menu_entry == -1) ? TRUE : FALSE);
+	menus_shade_entry(menu->entries[WINDOW_MENU_FILE].sub_menu, WINDOW_MENU_FILE_VIEW_LOG,
+			(window_menu_icon == wimp_ICON_WINDOW || has_logs == FALSE) ? TRUE : FALSE);
+	menus_shade_entry(menu->entries[WINDOW_MENU_FILE].sub_menu, WINDOW_MENU_FILE_SAVE_LOG,
+			(window_menu_icon == wimp_ICON_WINDOW || has_logs == FALSE) ? TRUE : FALSE);
 }
 
 /**
@@ -625,7 +654,15 @@ static void window_menu_warning(wimp_w w, wimp_menu *menu, wimp_message_menu_war
 			window_populate_file_info_dialogue(instance, window_menu_fold);
 			wimp_create_sub_menu(warning->sub_menu, warning->pos.x, warning->pos.y);
 			break;
+		case WINDOW_MENU_FILE_SAVE_LOG:
+			saveas_prepare_dialogue(window_log_saveas_dialogue);
+			wimp_create_sub_menu(warning->sub_menu, warning->pos.x, warning->pos.y);
+			break;
 		}
+		break;
+	case WINDOW_MENU_SAVE_LOGS:
+		saveas_prepare_dialogue(window_logs_saveas_dialogue);
+		wimp_create_sub_menu(warning->sub_menu, warning->pos.x, warning->pos.y);
 		break;
 	}
 }
@@ -647,18 +684,16 @@ static void window_menu_selection(wimp_w w, wimp_menu *menu, wimp_selection *sel
 	wimp_pointer		pointer;
 	wimp_get_pointer_info(&pointer);
 
-//	switch(selection->items[0]) {
-//	case ICONBAR_MENU_HELP:
-//		error = xos_cli("%Filer_Run <Unify$Dir>.!Help");
-//		if (error != NULL)
-//			error_report_os_error(error, wimp_ERROR_BOX_OK_ICON);
-//		break;
-
-//	case ICONBAR_MENU_QUIT:
-//		if (!main_check_for_unsaved_data())
-//			main_quit_flag = TRUE;
-//		break;
-//	}
+	switch(selection->items[0]) {
+	case WINDOW_MENU_FILE:
+		switch (selection->items[1]) {
+		case WINDOW_MENU_FILE_VIEW_LOG:
+			if (instance->definition->callback_open_log_viewer != NULL && window_menu_fold != -1)
+				instance->definition->callback_open_log_viewer(window_menu_fold, instance->client_data);
+			break;
+		}
+		break;
+	}
 }
 
 /**

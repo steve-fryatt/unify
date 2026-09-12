@@ -37,6 +37,7 @@ OBJS =  date_time.o	\
 	file_set.o	\
 	flexutils.o	\
 	iconbar.o	\
+	log.o		\
 	main.o		\
 	suite.o		\
 	textdump.o	\

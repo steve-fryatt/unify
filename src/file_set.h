@@ -130,6 +130,27 @@ osbool file_set_get_line_details(struct file_set_block *instance, int line, stru
 
 osbool file_set_get_object_details(struct file_set_block *instance, int line,
 		struct file_instance_object_details *details);
+
+/**
+ * Check whether an entry in a file set instance has a log associated with it.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \param line			The line number from which to return details.
+ * \return			TRUE if a log exists; else FALSE.
+ */
+
+osbool file_set_get_object_log(struct file_set_block *instance, int line);
+
+/**
+ * Open a log for an entry in a file set instance.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \param line			The line number from which to open the log.
+ * \return			TRUE if a log was opened; else FALSE.
+ */
+
+osbool file_set_open_object_log(struct file_set_block *instance, int line);
+
 /**
  * Return the timestamp for a file set instance.
  *
