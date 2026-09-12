@@ -32,6 +32,7 @@ APP := !Unify
 #PACKAGELOC := Desktop
 
 OBJS =  date_time.o	\
+	file_dialogue.o	\
 	file_instance.o	\
 	file_set.o	\
 	flexutils.o	\

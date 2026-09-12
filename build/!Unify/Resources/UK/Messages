@@ -70,4 +70,20 @@ Help.ListPane.Run:\Supdate the test results to reflect any changes to the files 
 Help.ListPane.Contract:\Scontract all of the test files shown in the \w, so that just the file names are visible.
 Help.ListPane.Expand:\Sexpand all of the entries in the test \w, so that all of the tests are visible.
 
+Help.FileInfo:This \w contains information about a test file set at the time of this test run.
+Help.FileInfo.Name:\Tname of the file set.
+Help.FileInfo.Status:\Tthe status of the file at the time of this test run.
+Help.FileInfo.Time:\Ttime that this test was run.
+Help.FileInfo.SName:\Tfilename of the source file.
+Help.FileInfo.STime:\Ttimestamp of the source file at the time of this test run.
+Help.FileInfo.EName:\Tfilename of the executable file.
+Help.FileInfo.ETime:\Ttimestamp of the executable file at the time of this test run.
+
+Help.ListMenu.00:\Rto perform actions on this test file.
+Help.ListMenu.0000:\Rsee details of this test file at the time of this test run.
+Help.ListMenu.0001:\Sview the log from the test run of this file.
+Help.ListMenu.0002:\Rsave the log data from this test run.
+Help.ListMenu.01:\Rto perform actions on this single test.
+Help.ListMenu.02:\Rto save the log data from this test run.
+
 #Help.LogListMenu.??:\Sopen this log for analysis.

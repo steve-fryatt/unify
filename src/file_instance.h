@@ -30,6 +30,7 @@
 #ifndef UNIFY_FILE_INSTANCE
 #define UNIFY_FILE_INSTANCE
 
+#include <stdint.h>
 #include <oslib/osgbpb.h>
 
 /**
@@ -57,6 +58,20 @@ struct file_instance_line_details {
 	unsigned name;
 	enum file_instance_status status;
 	osbool is_new;
+};
+
+/**
+ * Object details for a file instance.
+ */
+
+struct file_instance_object_details {
+	unsigned name;
+	uint64_t timestamp;
+	enum file_instance_status status;
+	unsigned source_filename;
+	uint64_t source_timestamp;
+	unsigned executable_filename;
+	uint64_t executable_timestamp;
 };
 
 /**
@@ -124,6 +139,16 @@ void file_instance_add_to_window(struct file_instance_block *instance, struct wi
  */
 
 osbool file_instance_get_line_details(struct file_instance_block *instance, struct file_set_block *set, struct file_instance_line_details *details);
+
+/**
+ * Return details of a file instance.
+ * \param *instance	Pointer to the instance of interest.
+ * \param *details	Pointer to a struct in which the details should be
+ *			returned.
+ * \return		TRUE if valid details were returned; else FALSE.
+ */
+
+osbool file_instance_get_object_details(struct file_instance_block *instance, struct file_instance_object_details *details);
 
 /**
  * Report whether a file instance has a source file identified.

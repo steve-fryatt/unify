@@ -30,3 +30,30 @@ menu(IconBarMenu, "Unify") {
 	item("Help...");
 	item("Quit");
 }
+
+/* The list window menu. */
+
+menu(ListWindowMenu, "Unify") {
+	item("File") {
+		submenu(ListWindowFileMenu);
+	}
+	item("Test") {
+		submenu(ListWindowTestMenu);
+		dotted;
+	}
+	item("Save Logs");
+}
+
+menu(ListWindowFileMenu, "File") {
+	item("Info") {
+		d_box(FileInfo) {
+			warning;
+		}
+	}
+	item("View Log...");
+	item("Save Log");
+}
+
+menu(ListWindowTestMenu, "Test") {
+	item("Info");
+}

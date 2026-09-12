@@ -48,6 +48,7 @@
 
 #include <sflib/debug.h>
 #include <sflib/errors.h>
+#include <sflib/icons.h>
 
 /* Application header files */
 
@@ -131,4 +132,29 @@ osbool date_time_write_standard_string(uint64_t time, char *buffer, size_t lengt
 	}
 
 	return TRUE;
+}
+
+/**
+ * Given a date and time, write a textual version into an icon.
+ *
+ * \param time		The time to convert.
+ * \param window	The window containing the icon
+ * \param icon		The icon to take the time.
+ * \return		TRUE if successful; else FALSE.
+ */
+
+osbool date_time_write_to_icon(uint64_t time, wimp_w window, wimp_i icon)
+{
+	char *buffer = icons_get_indirected_text_addr(window, icon);
+	size_t length = icons_get_indirected_text_length(window, icon);
+
+	if (time == 0) {
+		icons_strncpy(window, icon, "");
+		return TRUE;
+	}
+
+	if (buffer == NULL || length == 0)
+		return FALSE;
+
+	return date_time_write_standard_string(time, buffer, length);
 }

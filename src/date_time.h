@@ -62,4 +62,15 @@ uint64_t date_time_read_osgbpb_timestamp(osgbpb_info *entry);
 
 osbool date_time_write_standard_string(uint64_t time, char *buffer, size_t length);
 
+/**
+ * Given a date and time, write a textual version into an icon.
+ *
+ * \param time		The time to convert.
+ * \param window	The window containing the icon
+ * \param icon		The icon to take the time.
+ * \return		TRUE if successful; else FALSE.
+ */
+
+osbool date_time_write_to_icon(uint64_t time, wimp_w window, wimp_i icon);
+
 #endif

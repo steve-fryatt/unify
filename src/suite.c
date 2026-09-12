@@ -127,6 +127,7 @@ static void suite_close_handler(void *data);
 static void suite_navigation_handler(enum window_navigation_target target, void *data);
 static void suite_run_handler(osbool full, void *data);
 static osbool suite_redraw_line_handler(int fold, int entry, struct window_line *content, void *data);
+static osbool suite_object_info_handler(int fold, struct file_dialogue_data *info, void *data);
 
 /* The Test Suite window definiton. */
 
@@ -134,6 +135,7 @@ static struct window_definition suite_window_definition = {
 	.type = WINDOW_TYPE_SUITE,
 	.callback_close = suite_close_handler,
 	.callback_redraw = suite_redraw_line_handler,
+	.callback_fileinfo = suite_object_info_handler,
 	.callback_navigate = suite_navigation_handler,
 	.callback_run = suite_run_handler
 };
@@ -480,7 +482,7 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 	struct file_instance_line_details line_details;
 
 	if (entry < 0) {
-		if (!file_set_get_object_line_details(instance->current_file_set, fold, &line_details))
+		if (!file_set_get_line_details(instance->current_file_set, fold, &line_details))
 			return FALSE;
 
 		if (line_details.name == TEXTDUMP_NULL)
@@ -510,5 +512,46 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 		content->text = "This is a line";
 		content->status = WINDOW_STATUS_UNKNOWN;
 	}
+	return TRUE;
+}
+
+/**
+ * Handle line redraw events from an instance window.
+ *
+ * \param fold		The index of the fold containing the line.
+ * \param entry		The index of the entry within the fold, or -1.
+ * \param *content	Pointer to a struct in which to return the line data.
+ * \param *data		Pointer to our client data, which should be a
+ *			pointer to an instance.
+ * \return		TRUE if the line was valid; else FALSE.
+ */
+
+static osbool suite_object_info_handler(int fold, struct file_dialogue_data *info, void *data)
+{
+	struct suite_block *instance = data;
+	if (instance == NULL)
+		return FALSE;
+
+	char *textdump_base = textdump_get_base(instance->textdump);
+	if (textdump_base == NULL)
+		return FALSE;
+
+	struct file_instance_object_details object_details;
+
+	if (!file_set_get_object_details(instance->current_file_set, fold, &object_details))
+		return FALSE;
+
+	info->name = (object_details.name != TEXTDUMP_NULL) ?
+			textdump_base + object_details.name : NULL;
+	info->run_timestamp = object_details.timestamp;
+
+	info->source_filename = (object_details.source_filename != TEXTDUMP_NULL) ?
+			textdump_base + object_details.source_filename : NULL;
+	info->source_timestamp = object_details.source_timestamp;
+
+	info->executable_filename = (object_details.executable_filename != TEXTDUMP_NULL) ?
+			textdump_base + object_details.executable_filename : NULL;
+	info->executable_timestamp = object_details.executable_timestamp;
+
 	return TRUE;
 }

@@ -54,6 +54,7 @@
 #include <sflib/heap.h>
 #include <sflib/icons.h>
 #include <sflib/ihelp.h>
+#include <sflib/menus.h>
 #include <sflib/string.h>
 #include <sflib/templates.h>
 #include <sflib/windows.h>
@@ -63,6 +64,7 @@
 #include "window.h"
 
 #include "date_time.h"
+#include "file_dialogue.h"
 #include "flexutils.h"
 
 /* Constant definitions. */
@@ -149,21 +151,33 @@
  * The icon templates.
  */
 
-#define WINDOW_TEMPLATE_ICON_EXPAND 0
-#define WINDOW_TEMPLATE_ICON_NAME 1
-#define WINDOW_TEMPLATE_ICON_DETAIL 2
+#define WINDOW_TEMPLATE_ICON_EXPAND ((wimp_i) 0)
+#define WINDOW_TEMPLATE_ICON_NAME ((wimp_i) 1)
+#define WINDOW_TEMPLATE_ICON_DETAIL ((wimp_i) 2)
 
 /**
  * The toolbar icons.
  */
 
-#define WINDOW_TOOLBAR_ICON_DATE 0
-#define WINDOW_TOOLBAR_ICON_BACK 1
-#define WINDOW_TOOLBAR_ICON_FORWARD 2
-#define WINDOW_TOOLBAR_ICON_LATEST 3
-#define WINDOW_TOOLBAR_ICON_RUN 4
-#define WINDOW_TOOLBAR_ICON_CONTRACT 5
-#define WINDOW_TOOLBAR_ICON_EXPAND 6
+#define WINDOW_TOOLBAR_ICON_DATE ((wimp_i) 0)
+#define WINDOW_TOOLBAR_ICON_BACK ((wimp_i) 1)
+#define WINDOW_TOOLBAR_ICON_FORWARD ((wimp_i) 2)
+#define WINDOW_TOOLBAR_ICON_LATEST ((wimp_i) 3)
+#define WINDOW_TOOLBAR_ICON_RUN ((wimp_i) 4)
+#define WINDOW_TOOLBAR_ICON_CONTRACT ((wimp_i) 5)
+#define WINDOW_TOOLBAR_ICON_EXPAND ((wimp_i) 6)
+
+/**
+ * The Window menu entries.
+ */
+
+#define WINDOW_MENU_FILE 0
+#define WINDOW_MENU_TEST 1
+#define WINDOW_MENU_SAVE_LOGS 2
+
+#define WINDOW_MENU_FILE_INFO 0
+#define WINDOW_MENU_FILE_VIEW_LOG 1
+#define WINDOW_MENU_FILE_SAVE_LOG 2
 
 /* Structure definitions. */
 
@@ -223,6 +237,30 @@ static wimp_window *window_definition = NULL;
 static wimp_window *window_pane_definition = NULL;
 
 /**
+ * The window menu.
+ */
+
+static wimp_menu *window_menu = NULL;
+
+/**
+ * The fold over which the window menu was opened.
+ */
+
+static int window_menu_fold = -1;
+
+/**
+ * The entry over which the window menu was opened.
+ */
+
+static int window_menu_entry = -1;
+
+/**
+ * The icon over which the window menu was opened.
+ */
+
+static wimp_i window_menu_icon = wimp_ICON_WINDOW;
+
+/**
  * The font handle for normal text.
  */
 
@@ -240,6 +278,10 @@ static void window_open_handler(wimp_open *open);
 static void window_close_handler(wimp_close *close);
 static void window_click_handler(wimp_pointer *pointer);
 static void window_toolbar_click_handler(wimp_pointer *pointer);
+static void window_menu_prepare(wimp_w w, wimp_menu *menu, wimp_pointer *pointer);
+static void window_menu_warning(wimp_w w, wimp_menu *menu, wimp_message_menu_warning *warning);
+static void window_menu_close(wimp_w w, wimp_menu *menu);
+static void window_menu_selection(wimp_w w, wimp_menu *menu, wimp_selection *selection);
 static void window_redraw_handler(wimp_draw *redraw);
 static void window_scroll_handler(wimp_scroll *scroll);
 static osbool window_recalculate_columns(struct window_instance *instance, wimp_open *open);
@@ -251,6 +293,7 @@ static void window_set_extent(struct window_instance *instance);
 static void window_force_redraw_fold(struct window_instance *instance, int fold);
 static void window_force_redraw_fold_to_end(struct window_instance *instance, int fold);
 static void window_force_redraw_lines(struct window_instance *instance, int first, int last);
+static void window_populate_file_info_dialogue(struct window_instance *instance, int fold);
 static void window_decode_interactive_help(char *buffer, wimp_w window, wimp_i icon, os_coord pos, wimp_mouse_state buttons);
 static osbool window_decode_click_data(struct window_instance *instance, os_coord pos, int *fold, int *entry, wimp_i *icon);
 static osbool window_get_rows_from_fold(struct window_instance *instance, int fold, int *top, int *bottom);
@@ -275,6 +318,11 @@ void window_initialise(osspriteop_area *sprites)
 
 	window_pane_definition = templates_load_window("ListPane");
 	window_pane_definition->sprite_area = sprites;
+
+	/* Set up the window menu and its dialogues. */
+
+	window_menu = templates_get_menu("ListWindowMenu");
+	ihelp_add_menu(window_menu, "ListMenu");
 }
 
 
@@ -355,16 +403,26 @@ struct window_instance *window_create_instance(struct window_definition *definit
 	ihelp_add_window(instance->handle, "ListWindow", window_decode_interactive_help);
 
 	event_add_window_user_data(instance->handle, instance);
+	event_add_window_menu(instance->handle, window_menu);
 	event_add_window_open_event(instance->handle, window_open_handler);
 	event_add_window_close_event(instance->handle, window_close_handler);
-	event_add_window_redraw_event(instance->handle, window_redraw_handler);
 	event_add_window_mouse_event(instance->handle, window_click_handler);
+	event_add_window_menu_prepare(instance->handle, window_menu_prepare);
+	event_add_window_menu_warning(instance->handle, window_menu_warning);
+	event_add_window_menu_selection(instance->handle, window_menu_selection);
+	event_add_window_menu_close(instance->handle, window_menu_close);
+	event_add_window_redraw_event(instance->handle, window_redraw_handler);
 	event_add_window_scroll_event(instance->handle, window_scroll_handler);
 
 	ihelp_add_window(instance->pane_handle, "ListPane", NULL);
 
 	event_add_window_user_data(instance->pane_handle, instance);
+	event_add_window_menu(instance->pane_handle, window_menu);
 	event_add_window_mouse_event(instance->pane_handle, window_toolbar_click_handler);
+	event_add_window_menu_prepare(instance->pane_handle, window_menu_prepare);
+	event_add_window_menu_warning(instance->pane_handle, window_menu_warning);
+	event_add_window_menu_selection(instance->pane_handle, window_menu_selection);
+	event_add_window_menu_close(instance->pane_handle, window_menu_close);
 
 	/* Open the windows. */
 
@@ -514,6 +572,110 @@ static void window_toolbar_click_handler(wimp_pointer *pointer)
 		window_expand_contract_all_folds(instance, FALSE);
 		break;
 	}
+}
+
+/**
+ * Handle selections from the window menu.
+ *
+ * \param w			The window to which the menu belongs.
+ * \param *menu			Pointer to the menu itself.
+ * \param *pointer		Pointer to the pointer position data, or NULL
+ *				on a reopening.
+ */
+
+static void window_menu_prepare(wimp_w w, wimp_menu *menu, wimp_pointer *pointer)
+{
+	struct window_instance *instance = event_get_window_user_data(w);
+	if (instance == NULL || menu != window_menu)
+		return;
+
+	if (pointer != NULL) {
+		if (!window_decode_click_data(instance, pointer->pos,
+				&window_menu_fold, &window_menu_entry, &window_menu_icon)) {
+			window_menu_icon = wimp_ICON_WINDOW;
+			window_menu_fold = -1;
+			window_menu_entry = -1;
+		}
+	}
+
+	menus_shade_entry(menu, WINDOW_MENU_FILE,
+			(window_menu_icon == wimp_ICON_WINDOW || window_menu_fold == -1) ? TRUE : FALSE);
+	menus_shade_entry(menu, WINDOW_MENU_TEST,
+			(window_menu_icon == wimp_ICON_WINDOW || window_menu_fold == -1 || window_menu_entry == -1) ? TRUE : FALSE);
+}
+
+/**
+ * Handle Message_MenuWarning events from the window menu.
+ *
+ * \param  w			The window to which the menu belongs.
+ * \param  *menu		Pointer to the menu itself.
+ * \param *warning		The submenu warning message data.
+ */
+
+static void window_menu_warning(wimp_w w, wimp_menu *menu, wimp_message_menu_warning *warning)
+{
+	struct window_instance *instance = event_get_window_user_data(w);
+	if (instance == NULL || menu != window_menu)
+		return;
+
+	switch (warning->selection.items[0]) {
+	case WINDOW_MENU_FILE:
+		switch (warning->selection.items[1]) {
+		case WINDOW_MENU_FILE_INFO:
+			window_populate_file_info_dialogue(instance, window_menu_fold);
+			wimp_create_sub_menu(warning->sub_menu, warning->pos.x, warning->pos.y);
+			break;
+		}
+		break;
+	}
+}
+
+/**
+ * Handle selections from the window menu.
+ *
+ * \param w			The window to which the menu belongs.
+ * \param *menu			Pointer to the menu itself.
+ * \param *selection		Pointer to the Wimp menu selction block.
+ */
+
+static void window_menu_selection(wimp_w w, wimp_menu *menu, wimp_selection *selection)
+{
+	struct window_instance *instance = event_get_window_user_data(w);
+	if (instance == NULL || menu != window_menu)
+		return;
+
+	wimp_pointer		pointer;
+	wimp_get_pointer_info(&pointer);
+
+//	switch(selection->items[0]) {
+//	case ICONBAR_MENU_HELP:
+//		error = xos_cli("%Filer_Run <Unify$Dir>.!Help");
+//		if (error != NULL)
+//			error_report_os_error(error, wimp_ERROR_BOX_OK_ICON);
+//		break;
+
+//	case ICONBAR_MENU_QUIT:
+//		if (!main_check_for_unsaved_data())
+//			main_quit_flag = TRUE;
+//		break;
+//	}
+}
+
+/**
+ * Handle the window menu closing.
+ *
+ * \param w			The window to which the menu belongs.
+ * \param *menu			Pointer to the menu itself.
+ */
+
+static void window_menu_close(wimp_w w, wimp_menu *menu)
+{
+	if (menu != window_menu)
+		return;
+
+	window_menu_icon = wimp_ICON_WINDOW;
+	window_menu_fold = -1;
+	window_menu_entry = -1;
 }
 
 /**
@@ -1188,6 +1350,24 @@ static void window_force_redraw_lines(struct window_instance *instance, int firs
 	}
 
 	wimp_force_redraw(instance->handle, 0, bottom, instance->width, top);
+}
+
+/**
+ * TODO
+ */
+
+static void window_populate_file_info_dialogue(struct window_instance *instance, int fold)
+{
+	if (instance == NULL || fold < 0 || fold > instance->fold_count)
+		return;
+
+	struct file_dialogue_data data;
+
+	if (instance->definition->callback_fileinfo == NULL ||
+			instance->definition->callback_fileinfo(fold, &data, (void *) instance->client_data) == FALSE)
+		return;
+
+	file_dialogue_populate(&data);
 }
 
 /**

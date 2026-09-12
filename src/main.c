@@ -58,6 +58,7 @@
 
 #include "main.h"
 
+#include "file_dialogue.h"
 #include "iconbar.h"
 #include "suite.h"
 #include "file_instance.h"
@@ -235,6 +236,7 @@ static void main_initialise(void)
 	url_initialise();
 
 	window_initialise(sprites);
+	file_dialogue_initialise();
 	iconbar_initialise();
 	file_instance_initialise();
 

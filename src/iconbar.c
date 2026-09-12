@@ -168,10 +168,7 @@ static void iconbar_click_handler(wimp_pointer *pointer)
 
 static void iconbar_menu_selection(wimp_w w, wimp_menu *menu, wimp_selection *selection)
 {
-	wimp_pointer		pointer;
 	os_error		*error;
-
-	wimp_get_pointer_info(&pointer);
 
 	switch(selection->items[0]) {
 	case ICONBAR_MENU_HELP:

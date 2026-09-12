@@ -101,6 +101,8 @@ struct window_line {
 	osbool faded;				/**< Should the line be shown faded?	*/
 };
 
+#include "file_dialogue.h"
+
 /**
  * A client definition for a window instance
  */
@@ -117,6 +119,11 @@ struct window_definition {
 	 * Callback for requesting line redraw data.
 	 */
 	osbool (*callback_redraw)(int fold, int entry, struct window_line *content, void *data);
+
+	/**
+	 * Callback for requesting file details.
+	 */
+	osbool (*callback_fileinfo)(int fold, struct file_dialogue_data *info, void *data);
 
 	/**
 	 * Callback for navigating around test runs.

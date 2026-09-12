@@ -310,6 +310,30 @@ osbool file_instance_get_line_details(struct file_instance_block *instance, stru
 }
 
 /**
+ * Return details of a file instance.
+ * \param *instance	Pointer to the instance of interest.
+ * \param *details	Pointer to a struct in which the details should be
+ *			returned.
+ * \return		TRUE if valid details were returned; else FALSE.
+ */
+
+osbool file_instance_get_object_details(struct file_instance_block *instance, struct file_instance_object_details *details)
+{
+	if (instance == NULL || details == NULL)
+		return FALSE;
+
+	details->name = instance->name;
+	details->timestamp = file_set_get_timestamp(instance->initial);
+	details->status = instance->status;
+	details->source_filename = instance->source.name;
+	details->source_timestamp = instance->source.timestamp;
+	details->executable_filename = instance->executable.name;
+	details->executable_timestamp = instance->executable.timestamp;
+
+	return TRUE;
+}
+
+/**
  * Report whether a file instance has a source file identified.
  *
  * \param *instance	Pointer to the instance of interest.
