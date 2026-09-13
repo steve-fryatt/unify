@@ -35,6 +35,8 @@
 
 /* OSLib header files */
 
+#include <oslib/colourtrans.h>
+#include <oslib/font.h>
 #include <oslib/os.h>
 #include <oslib/wimp.h>
 
@@ -52,16 +54,55 @@
 
 #include "log.h"
 
+#include "flexutils.h"
+
 /* Structure definitions. */
+
+/**
+ * A line redraw record.
+ */
+
+struct log_redraw {
+	unsigned offset;
+	os_colour colour;
+	osbool bold;
+};
 
 /**
  * A log instance.
  */
 
 struct log_instance {
+	int line_count;
+
+	struct log_redraw *lines;
 
 	wimp_w handle;
+
+	char *text;
+
+	size_t length;
+
+	size_t allocation;
 };
+
+/***
+ * The height of a log row.
+ */
+
+#define LOG_ROW_HEIGHT 32
+
+/**
+ * The inset of a log row.
+ */
+
+#define LOG_ROW_INSET 8
+
+/**
+ * The allocation unit for log space.
+ */
+
+#define LOG_ALLOCATION_UNIT 4098
 
 /* Global variables. */
 
@@ -77,9 +118,26 @@ static wimp_window *log_window_definition = NULL;
 
 static wimp_menu *log_window_menu = NULL;
 
+/**
+ * The font handle for normal text.
+ */
+
+static font_f log_normal_font = font_SYSTEM;
+
+/**
+ * The font handle for bold text.
+ */
+
+static font_f log_bold_font = font_SYSTEM;
+
 /* Static function prototypes. */
 
 static void log_close_handler(wimp_close *close);
+static void log_redraw_handler(wimp_draw *redraw);
+
+static os_error *log_find_fonts(void);
+static void log_lose_fonts(void);
+static os_error *log_paint_text(struct log_redraw *line_info, char *text, os_coord *pos);
 
 /**
  * Initialise the log implementation.
@@ -113,17 +171,19 @@ struct log_instance *log_create_instance(void)
 
 	instance->handle = NULL;
 
+	instance->lines = NULL;
+	instance->line_count = 0;
+
+	instance->allocation = LOG_ALLOCATION_UNIT;
+	instance->length = 0;
+	instance->text = NULL;
+
 	/* Allocate the flex blocks. */
 
-//	if (!flexutils_allocate((void **) &(instance->known_objects), sizeof(struct window_object), instance->object_space)) {
-//		window_delete_instance(instance);
-//		return NULL;
-//	}
-
-//	if (!flexutils_allocate((void **) &(instance->active_folds), sizeof(struct window_fold), instance->fold_space)) {
-//		window_delete_instance(instance);
-//		return NULL;
-//	}
+	if (!flexutils_allocate((void **) &(instance->text), sizeof(char), instance->allocation)) {
+		log_delete_instance(instance);
+		return NULL;
+	}
 
 	debug_printf("Log 0x%x created...", instance);
 
@@ -151,8 +211,8 @@ void log_delete_instance(struct log_instance *instance)
 
 	/* Free the memory used. */
 
-//	flexutils_free((void **) &(instance->known_objects));
-//	flexutils_free((void **) &(instance->active_folds));
+	flexutils_free((void **) &(instance->lines));
+	flexutils_free((void **) &(instance->text));
 
 	debug_printf("Log 0x%x deleted...", instance);
 
@@ -193,7 +253,7 @@ void log_open_window(struct log_instance *instance)
 //	event_add_window_menu_warning(instance->handle, window_menu_warning);
 //	event_add_window_menu_selection(instance->handle, window_menu_selection);
 //	event_add_window_menu_close(instance->handle, window_menu_close);
-//	event_add_window_redraw_event(instance->handle, window_redraw_handler);
+	event_add_window_redraw_event(instance->handle, log_redraw_handler);
 //	event_add_window_scroll_event(instance->handle, window_scroll_handler);
 
 	/* Open the windows. */
@@ -209,12 +269,6 @@ void log_open_window(struct log_instance *instance)
 //	windows_open_nested_as_toolbar(instance->pane_handle, instance->handle, instance->pane_size, FALSE);
 //	window_position_toolbar_icons((wimp_open *) &window, instance);
 }
-
-
-
-
-
-
 
 /**
  * Handle Close events on an instance window.
@@ -234,4 +288,219 @@ static void log_close_handler(wimp_close *close)
 	wimp_delete_window(instance->handle);
 
 	instance->handle = NULL;
+}
+
+/**
+ * Handle Redraw events on an log instance window.
+ *
+ * \param *redraw		The Wimp Redraw data block.
+ */
+
+static void log_redraw_handler(wimp_draw *redraw)
+{
+	struct log_instance *instance = event_get_window_user_data(redraw->w);
+
+	log_find_fonts();
+
+	/* Perform the redraw. */
+
+	osbool more = wimp_redraw_window(redraw);
+
+	/* Work out the redraw origin. */
+
+	int ox = (instance != NULL) ? redraw->box.x0 - redraw->xscroll : 0;
+	int oy = (instance != NULL) ? redraw->box.y1 - redraw->yscroll : 0;
+
+	os_coord pos = { .x = ox + LOG_ROW_INSET };
+
+	while (more) {
+		if (instance != NULL && instance->lines != NULL) {
+			int top = (oy - redraw->clip.y1) / LOG_ROW_HEIGHT;
+			if (top < 0)
+				top = 0;
+
+			int base = (oy - redraw->clip.y0) / LOG_ROW_HEIGHT;
+			if (base >= instance->line_count)
+				base = instance->line_count - 1;
+
+			debug_printf("Redrawing lines %d to %d", top, base);
+
+			for (int y = top; y <= base; y++) {
+				pos.y = oy - ((y + 1) * LOG_ROW_HEIGHT);
+				log_paint_text(instance->lines + y, instance->text, &pos);
+			}
+		}
+
+		more = wimp_get_rectangle(redraw);
+	}
+
+	log_lose_fonts();
+}
+
+/**
+ * TODO
+ */
+
+void log_add_text(struct log_instance *instance, char *content, size_t length)
+{
+	if (instance == NULL || content == NULL || length == 0)
+		return;
+
+	/* Make sure that we have enough space. Add 1 to the space so that at the
+	 * end we have a byte left to terminate the buffer if we have to.
+	 */
+
+	if (instance->length + length + 1 >= instance->allocation) {
+		size_t new_space = instance->allocation;
+
+		while (new_space <= instance->length + length + 1)
+			new_space += LOG_ALLOCATION_UNIT;
+
+		if (flexutils_resize((void **) &(instance->text), sizeof(char), new_space))
+			instance->allocation = new_space;
+	}
+
+	if (instance->length + length + 1 >= instance->allocation)
+		return;
+
+	/* Copy the text into the buffer. */
+
+	debug_printf("Adding log text...");
+
+	for (int i = 0; i < length; i++)
+		instance->text[i + instance->length] = content[i];
+
+	instance->length += length;
+}
+
+/**
+ * TODO
+ */
+
+void log_finish_text(struct log_instance *instance)
+{
+	if (instance == NULL || instance->text == NULL)
+		return;
+
+	if ((instance->length + 1) >= instance->allocation)
+		return;
+
+	instance->text[instance->length++] = '\0';
+
+	debug_printf("The log: %s", instance->text);
+
+	/* Find line endings. */
+
+	int lines = (instance->length > 0) ? 1 : 0;
+
+	for (unsigned i = 0; i < (instance->length - 1); i++) {
+		if (instance->text[i] == '\r' && instance->text[i+1] == '\n') {
+			instance->text[i++] = '\0';
+			instance->text[i] = '\0';
+			lines++;
+		} else if (instance->text[i] == '\n' && instance->text[i+1] == '\r') {
+			instance->text[i++] = '\0';
+			instance->text[i] = '\0';
+			lines++;
+		} else if (instance->text[i] == '\r' || instance->text[i] == '\n') {
+			instance->text[i] = '\0';
+			lines++;
+		}
+	}
+
+	debug_printf("Found %d log lines", lines);
+
+	if (!flexutils_allocate((void **) &(instance->lines), sizeof(struct log_redraw), lines)) {
+		instance->lines = NULL;
+		return;
+	}
+
+	instance->line_count = lines;
+
+	unsigned i = 0;
+	int line = 0;
+
+	while (i < instance->length && line < lines) {
+		instance->lines[line].offset = i;
+		instance->lines[line].bold = FALSE;
+		instance->lines[line].colour = os_COLOUR_BLACK;
+		line++;
+
+		while (i < instance->length && instance->text[i] != '\0')
+			i++;
+
+		while (i < instance->length && instance->text[i] == '\0')
+			i++;
+	}
+}
+
+/**
+ * Find the fonts required to plot into a window.
+ *
+ * \return			Pointer to an error block, or NULL if successful.
+ */
+
+static os_error *log_find_fonts(void)
+{
+	os_error *error = NULL;
+	int size = 192; // 12 pt
+
+	if (log_normal_font == 0 && error == NULL) {
+		error = xfont_find_font("Corpus.Medium", size, size, 0, 0, &log_normal_font, NULL, NULL);
+		if (error != NULL)
+			log_normal_font = font_SYSTEM;
+	}
+
+	if (log_bold_font == 0 && error == NULL) {
+		error = xfont_find_font("Corpus.Bold", size, size, 0, 0, &log_bold_font, NULL, NULL);
+		if (error != NULL)
+			log_bold_font = font_SYSTEM;
+	}
+
+	return error;
+}
+
+/**
+ * Lose the fonts used to plot into a window.
+ */
+
+static void log_lose_fonts(void)
+{
+	if (log_normal_font != 0)
+		font_lose_font(log_normal_font);
+
+	if (log_bold_font != 0)
+		font_lose_font(log_bold_font);
+
+	log_normal_font = font_SYSTEM;
+	log_bold_font = font_SYSTEM;
+}
+
+/**
+ * Paint a line into a window.
+ *
+ * \param *line_info		Pointer to the line details.
+ * \param *text			Pointer to the base of the text area.
+ * \param *pos			Pointer to a coordinate block.
+ * \return			Pointer to an error block, or NULL if successful.
+ */
+
+static os_error *log_paint_text(struct log_redraw *line_info, char *text, os_coord *pos)
+{
+	os_error *error;
+	font_f font;
+
+	if (line_info == NULL)
+		return NULL;
+
+	font = (line_info->bold == TRUE) ? log_bold_font : log_normal_font;
+
+	if (text == NULL || font == font_SYSTEM)
+		return NULL;
+
+	error = xcolourtrans_set_font_colours(font, os_COLOUR_VERY_LIGHT_GREY, line_info->colour, 14, NULL, NULL, NULL);
+	if (error != NULL)
+		return error;
+
+	return xfont_paint(font, text + line_info->offset, font_OS_UNITS | font_KERN | font_GIVEN_FONT, pos->x, pos->y, NULL, NULL, 0);
 }

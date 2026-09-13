@@ -40,8 +40,6 @@
 
 /* OSLib header files */
 
-#include <oslib/colourtrans.h>
-#include <oslib/font.h>
 #include <oslib/os.h>
 #include <oslib/osfile.h>
 #include <oslib/osspriteop.h>
@@ -273,18 +271,6 @@ static int window_menu_entry = -1;
  */
 
 static wimp_i window_menu_icon = wimp_ICON_WINDOW;
-
-/**
- * The font handle for normal text.
- */
-
-static font_f window_normal_font = font_SYSTEM;
-
-/**
- * The font handle for bold text.
- */
-
-static font_f window_bold_font = font_SYSTEM;
 
 /* Static function prototypes. */
 
@@ -1764,77 +1750,5 @@ static void window_format_numeric_data(struct window_redraw *value, char *buffer
 }
 
 
-/**
- * Find the fonts required to plot into a window.
- *
- * \return			Pointer to an error block, or NULL if successful.
- */
-
-static os_error *window_find_fonts(void)
-{
-	os_error *error = NULL;
-	int size = 192; // 12 pt
-
-	if (window_normal_font == 0 && error == NULL) {
-		error = xfont_find_font("Corpus.Medium", size, size, 0, 0, &window_normal_font, NULL, NULL);
-		if (error != NULL)
-			window_normal_font = font_SYSTEM;
-	}
-
-	if (window_bold_font == 0 && error == NULL) {
-		error = xfont_find_font("Corpus.Bold", size, size, 0, 0, &window_bold_font, NULL, NULL);
-		if (error != NULL)
-			window_bold_font = font_SYSTEM;
-	}
-
-	return error;
-}
-
-
-/**
- * Lose the fonts used to plot into a window.
- */
-
-static void window_lose_fonts(void)
-{
-	if (window_normal_font != 0)
-		font_lose_font(window_normal_font);
-
-	if (window_bold_font != 0)
-		font_lose_font(window_bold_font);
-
-	window_normal_font = font_SYSTEM;
-	window_bold_font = font_SYSTEM;
-}
-
-
-/**
- * Paint a line into a window.
- *
- * \param *line_info		Pointer to the line details.
- * \param *text			Pointer to an alternative text line, when required.
- * \param *pos			Pointer to a coordinate block.
- * \return			Pointer to an error block, or NULL if successful.
- */
-
-static os_error *window_paint_text(struct window_redraw *line_info, char *text, os_coord *pos)
-{
-	os_error *error;
-	font_f font;
-
-	if (line_info == NULL)
-		return NULL;
-
-	font = (line_info->bold == TRUE) ? window_bold_font : window_normal_font;
-
-	if (text == NULL || font == font_SYSTEM)
-		return NULL;
-
-	error = xcolourtrans_set_font_colours(font, os_COLOUR_VERY_LIGHT_GREY, line_info->colour, 14, NULL, NULL, NULL);
-	if (error != NULL)
-		return error;
-
-	return xfont_paint(font, text, font_OS_UNITS | font_KERN | font_GIVEN_FONT, pos->x, pos->y, NULL, NULL, 0);
-}
 
 #endif

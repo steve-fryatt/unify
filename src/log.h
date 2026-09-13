@@ -66,4 +66,16 @@ void log_delete_instance(struct log_instance *instance);
 
 void log_open_window(struct log_instance *instance);
 
+/**
+ * TODO
+ */
+
+void log_add_text(struct log_instance *instance, char *content, size_t length);
+
+/**
+ * TODO
+ */
+
+void log_finish_text(struct log_instance *instance);
+
 #endif

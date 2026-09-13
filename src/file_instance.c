@@ -340,7 +340,6 @@ osbool file_instance_get_object_details(struct file_instance_block *instance, st
 	details->source_timestamp = instance->source.timestamp;
 	details->executable_filename = instance->executable.name;
 	details->executable_timestamp = instance->executable.timestamp;
-	details->has_log = FALSE; // TODO
 
 	return TRUE;
 }
@@ -549,8 +548,12 @@ void file_instance_validate_files(struct file_instance_block *instance)
 		break;
 	}
 
-	if (instance->status == FILE_INSTANCE_STATUS_READY_TO_RUN) // TODO - Remove this!!!
+	if (instance->status == FILE_INSTANCE_STATUS_READY_TO_RUN) { // TODO - Remove this!!!
 		instance->log = log_create_instance();
+		log_add_text(instance->log, "This is some text\nand", 21);
+		log_add_text(instance->log, " this is some more", 18);
+		log_finish_text(instance->log);
+	}
 }
 
 
