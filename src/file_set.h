@@ -132,14 +132,18 @@ osbool file_set_get_object_details(struct file_set_block *instance, int line,
 		struct file_instance_object_details *details);
 
 /**
- * Check whether an entry in a file set instance has a log associated with it.
+ * Check for log files within a file set, both for a specific entry and for
+ * logs with any entries.
  *
  * \param *instance		Pointer to the file set instance of interest.
  * \param line			The line number from which to return details.
- * \return			TRUE if a log exists; else FALSE.
+ * \param *this_log		Pointer to a variable in which to return TRUE
+ *				or FALSE for the specific entry log.
+ * \param *any_logs		Pointer to a variable in which to return TRUE
+ *				or FALSE for any log in the set.
  */
 
-osbool file_set_get_object_log(struct file_set_block *instance, int line);
+void file_set_get_object_log_status(struct file_set_block *instance, int line, osbool *this_log, osbool *any_logs);
 
 /**
  * Open a log for an entry in a file set instance.
@@ -150,6 +154,27 @@ osbool file_set_get_object_log(struct file_set_block *instance, int line);
  */
 
 osbool file_set_open_object_log(struct file_set_block *instance, int line);
+
+/**
+ * Save a specific object log file to disc.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \param line			The line number from which to save the log.
+ * \param *filename		The filename to which to write the log.
+ * \return			TRUE if the log was saved; else FALSE.
+ */
+
+osbool file_set_save_object_log(struct file_set_block *instance, int line, char *filename);
+
+/**
+ * Save all of the object log files to disc.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \param *filename		The filename to which to write the logs.
+ * \return			TRUE if the logs were saved; else FALSE.
+ */
+
+osbool file_set_save_all_logs(struct file_set_block *instance, char *filename);
 
 /**
  * Return the timestamp for a file set instance.

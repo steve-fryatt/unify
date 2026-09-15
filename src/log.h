@@ -30,6 +30,8 @@
 #ifndef UNIFY_LOG
 #define UNIFY_LOG
 
+#include <stdio.h>
+
 /**
  * A log instance.
  */
@@ -77,5 +79,15 @@ void log_add_text(struct log_instance *instance, char *content, size_t length);
  */
 
 void log_finish_text(struct log_instance *instance);
+
+/**
+ * Write a log to a file handle.
+ *
+ * \param *instance		Pointer to the log instance to be written.
+ * \param *file			Pointer to the file handle to write to.
+ * \return			TRUE if successful; FALSE on failure.
+ */
+
+osbool log_write_to_file(struct log_instance *instance, FILE *file);
 
 #endif

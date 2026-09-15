@@ -294,6 +294,8 @@ static void window_force_redraw_fold(struct window_instance *instance, int fold)
 static void window_force_redraw_fold_to_end(struct window_instance *instance, int fold);
 static void window_force_redraw_lines(struct window_instance *instance, int first, int last);
 static void window_populate_file_info_dialogue(struct window_instance *instance, int fold);
+static osbool window_save_log(char *filename, osbool selection, void *data);
+static osbool window_save_logs(char *filename, osbool selection, void *data);
 static void window_decode_interactive_help(char *buffer, wimp_w window, wimp_i icon, os_coord pos, wimp_mouse_state buttons);
 static osbool window_decode_click_data(struct window_instance *instance, os_coord pos, int *fold, int *entry, wimp_i *icon);
 static osbool window_get_rows_from_fold(struct window_instance *instance, int fold, int *top, int *bottom);
@@ -326,8 +328,8 @@ void window_initialise(osspriteop_area *sprites)
 
 	/* Set up the Save As dialogue. */
 
-	window_log_saveas_dialogue = saveas_create_dialogue(FALSE, "file_fff", osfile_TYPE_TEXT, NULL);
-	window_logs_saveas_dialogue = saveas_create_dialogue(FALSE, "file_fff", osfile_TYPE_TEXT, NULL);
+	window_log_saveas_dialogue = saveas_create_dialogue(FALSE, "file_fff", osfile_TYPE_TEXT, window_save_log);
+	window_logs_saveas_dialogue = saveas_create_dialogue(FALSE, "file_fff", osfile_TYPE_TEXT, window_save_logs);
 }
 
 
@@ -606,17 +608,21 @@ static void window_menu_prepare(wimp_w w, wimp_menu *menu, wimp_pointer *pointer
 	saveas_initialise_dialogue(window_log_saveas_dialogue, NULL, "DefLogFile", NULL, FALSE, FALSE, instance);
 	saveas_initialise_dialogue(window_logs_saveas_dialogue, NULL, "DefLogsFile", NULL, FALSE, FALSE, instance);
 
-	osbool has_logs = (window_menu_fold == -1 || instance->definition->callback_file_has_log == NULL) ? TRUE :
-			(instance->definition->callback_file_has_log(window_menu_fold, instance->client_data));
+	osbool this_log = FALSE, any_logs = FALSE;
+
+	if (instance->definition->callback_file_has_log != NULL)
+		(instance->definition->callback_file_has_log(window_menu_fold, instance->client_data, &this_log, &any_logs));
 
 	menus_shade_entry(menu, WINDOW_MENU_FILE,
 			(window_menu_icon == wimp_ICON_WINDOW || window_menu_fold == -1) ? TRUE : FALSE);
 	menus_shade_entry(menu, WINDOW_MENU_TEST,
 			(window_menu_icon == wimp_ICON_WINDOW || window_menu_fold == -1 || window_menu_entry == -1) ? TRUE : FALSE);
+	menus_shade_entry(menu, WINDOW_MENU_SAVE_LOGS,
+			(any_logs == FALSE) ? TRUE : FALSE);
 	menus_shade_entry(menu->entries[WINDOW_MENU_FILE].sub_menu, WINDOW_MENU_FILE_VIEW_LOG,
-			(window_menu_icon == wimp_ICON_WINDOW || has_logs == FALSE) ? TRUE : FALSE);
+			(window_menu_icon == wimp_ICON_WINDOW || this_log == FALSE) ? TRUE : FALSE);
 	menus_shade_entry(menu->entries[WINDOW_MENU_FILE].sub_menu, WINDOW_MENU_FILE_SAVE_LOG,
-			(window_menu_icon == wimp_ICON_WINDOW || has_logs == FALSE) ? TRUE : FALSE);
+			(window_menu_icon == wimp_ICON_WINDOW || this_log == FALSE) ? TRUE : FALSE);
 }
 
 /**
@@ -1389,6 +1395,42 @@ static void window_populate_file_info_dialogue(struct window_instance *instance,
 		return;
 
 	file_dialogue_populate(&data);
+}
+
+/**
+ * TODO
+ */
+
+static osbool window_save_log(char *filename, osbool selection, void *data)
+{
+	struct window_instance *instance = data;
+	if (instance == NULL || filename == NULL || window_menu_fold == -1)
+		return FALSE;
+
+	debug_printf("Save log to %s", filename);
+
+	if (instance->definition->callback_save_log != NULL)
+		return instance->definition->callback_save_log(window_menu_fold, filename, instance->client_data);
+
+	return TRUE;
+}
+
+/**
+ * TODO
+ */
+
+static osbool window_save_logs(char *filename, osbool selection, void *data)
+{
+	struct window_instance *instance = data;
+	if (instance == NULL || filename == NULL)
+		return FALSE;
+
+	debug_printf("Save logs to %s", filename);
+
+	if (instance->definition->callback_save_all_logs != NULL)
+		return instance->definition->callback_save_all_logs(filename, instance->client_data);
+
+	return TRUE;
 }
 
 /**

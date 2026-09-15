@@ -386,6 +386,57 @@ osbool file_instance_open_log(struct file_instance_block *instance)
 }
 
 /**
+ * Write the log file for an instance to a file handle.
+ *
+ * \param *instance	Pointer to the instance of interest.
+ * \param *file		The file handle to write to.
+ * \param header	TRUE to write a header for the file; else FALSE.
+ * \return		TRUE if the log was written; else FALSE.
+ */
+
+osbool file_instance_save_log(struct file_instance_block *instance, FILE *file, osbool header)
+{
+	if (instance == NULL || instance->log == NULL || file == NULL)
+		return FALSE;
+
+	/* If required, write a header block for the log.*/
+
+	if (header == TRUE) {
+		if (ftell(file) > 0) {
+			/* Separate the log from any previous ones. */
+
+			if (fputs("\n", file) == EOF)
+				return FALSE;
+		}
+
+		/* Write the file name. */
+
+		char *textbase = suite_get_textdump_base(instance->parent);
+
+		if (fprintf(file, "# File: %s\n", textbase + instance->name) < 0)
+			return FALSE;
+
+		/* Write the run timestamp. */
+
+		uint64_t date = file_set_get_timestamp(instance->initial);
+		char buffer[64];
+		date_time_write_standard_string(date, buffer, sizeof(buffer));
+
+		if (fprintf(file, "# Date: %s\n", buffer) < 0)
+			return FALSE;
+
+		/* Blank line following the header. */
+
+		if (fputs("\n", file) == EOF)
+			return FALSE;
+	}
+
+	/* Write out the log contents. */
+
+	return log_write_to_file(instance->log, file);
+}
+
+/**
  * Compare the details of an object found on disc with those stored in a
  * file instance.
  *

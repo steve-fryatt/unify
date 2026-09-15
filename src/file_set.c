@@ -32,6 +32,7 @@
 #include <string.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 /* Acorn C header files */
 
@@ -379,22 +380,51 @@ osbool file_set_get_object_details(struct file_set_block *instance, int line,
 }
 
 /**
- * Check whether an entry in a file set instance has a log associated with it.
+ * Check for log files within a file set, both for a specific entry and for
+ * logs with any entries.
  *
  * \param *instance		Pointer to the file set instance of interest.
  * \param line			The line number from which to return details.
- * \return			TRUE if a log exists; else FALSE.
+ * \param *this_log		Pointer to a variable in which to return TRUE
+ *				or FALSE for the specific entry log.
+ * \param *any_logs		Pointer to a variable in which to return TRUE
+ *				or FALSE for any log in the set.
  */
 
-osbool file_set_get_object_log(struct file_set_block *instance, int line)
+void file_set_get_object_log_status(struct file_set_block *instance, int line, osbool *this_log, osbool *any_logs)
 {
+	if (this_log != NULL)
+		*this_log = FALSE;
+
+	if (any_logs != NULL)
+		*any_logs = FALSE;
+
 	if (instance == NULL || instance->objects == NULL)
-		return FALSE;
+		return;
 
-	if (line < 0 || line >= instance->object_count)
-		return FALSE;
+	/* If the client wants to know about a specific log, look for that first. */
 
-	return file_instance_has_log(instance->objects[line]);
+	if (this_log != NULL && line >= 0 && line < instance->object_count) {
+		*this_log = file_instance_has_log(instance->objects[line]);
+
+		/* If this entry has a log, we know that any_logs must be true. */
+
+		if (*this_log == TRUE && any_logs != NULL) {
+			*any_logs = TRUE;
+			return;
+		}
+	}
+
+	/* If we didn't get a conclusive answer before, search for any logs. */
+
+	if (any_logs != NULL) {
+		for (int i = 0; i < instance->object_count; i++) {
+			if (file_instance_has_log(instance->objects[i])) {
+				*any_logs = TRUE;
+				return;
+			}
+		}
+	}
 }
 
 /**
@@ -414,6 +444,63 @@ osbool file_set_open_object_log(struct file_set_block *instance, int line)
 		return FALSE;
 
 	return file_instance_open_log(instance->objects[line]);
+}
+
+/**
+ * Save a specific object log file to disc.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \param line			The line number from which to save the log.
+ * \param *filename		The filename to which to write the log.
+ * \return			TRUE if the log was saved; else FALSE.
+ */
+
+osbool file_set_save_object_log(struct file_set_block *instance, int line, char *filename)
+{
+	if (instance == NULL || instance->objects == NULL)
+		return FALSE;
+
+	if (line < 0 || line >= instance->object_count || file_instance_has_log(instance->objects[line]) == FALSE)
+		return FALSE;
+
+	FILE *file = fopen(filename, "w");
+	if (file == NULL)
+		return FALSE;
+
+	osbool written = file_instance_save_log(instance->objects[line], file, FALSE);
+
+	fclose(file);
+
+	return written;
+}
+
+/**
+ * Save all of the object log files to disc.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \param *filename		The filename to which to write the logs.
+ * \return			TRUE if the logs were saved; else FALSE.
+ */
+
+osbool file_set_save_all_logs(struct file_set_block *instance, char *filename)
+{
+	if (instance == NULL || instance->objects == NULL)
+		return FALSE;
+
+	FILE *file = fopen(filename, "w");
+	if (file == NULL)
+		return FALSE;
+
+	osbool written = TRUE;
+
+	for (int line = 0; line < instance->object_count && written == TRUE; line++) {
+		if (file_instance_has_log(instance->objects[line]))
+			written = file_instance_save_log(instance->objects[line], file, TRUE);
+	}
+
+	fclose(file);
+
+	return written;
 }
 
 /**

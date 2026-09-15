@@ -128,12 +128,22 @@ struct window_definition {
 	/**
 	 * Callback for requesting the presence of log data.
 	 */
-	osbool (*callback_file_has_log)(int fold, void *data);
+	void (*callback_file_has_log)(int fold, void *data, osbool *this_log, osbool *any_log);
 
 	/**
 	 * Callback to request that a log viewer is opened.
 	 */
 	void (*callback_open_log_viewer)(int fold, void *data);
+
+	/**
+	 * Callback to request that a specific log is saved.
+	 */
+	osbool (*callback_save_log)(int fold, char* filename, void *data);
+
+	/**
+	 * Callback to request that all logs are saved.
+	 */
+	osbool (*callback_save_all_logs)(char *filename, void *data);
 
 	/**
 	 * Callback for navigating around test runs.

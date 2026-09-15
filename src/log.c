@@ -30,6 +30,7 @@
 /* ANSI C header files */
 
 #include <string.h>
+#include <stdio.h>
 
 /* Acorn C header files */
 
@@ -432,6 +433,27 @@ void log_finish_text(struct log_instance *instance)
 		while (i < instance->length && instance->text[i] == '\0')
 			i++;
 	}
+}
+
+/**
+ * Write a log to a file handle.
+ *
+ * \param *instance		Pointer to the log instance to be written.
+ * \param *file			Pointer to the file handle to write to.
+ * \return			TRUE if successful; FALSE on failure.
+ */
+
+osbool log_write_to_file(struct log_instance *instance, FILE *file)
+{
+	if (instance == NULL || instance->lines == NULL || file == NULL)
+		return FALSE;
+
+	for (int line = 0; line < instance->line_count; line++) {
+		if (fputs(instance->text + instance->lines[line].offset, file) == EOF || fputc('\n', file) == EOF)
+			return FALSE;
+	}
+
+	return TRUE;
 }
 
 /**
