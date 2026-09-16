@@ -1290,12 +1290,12 @@ static void window_set_extent(struct window_instance *instance)
 
 	/* Call Wimp_SetExtent to update the extent, safe in the knowledge that the visible area will still exist. */
 
-	os_box extent;
-
-	extent.x0 = window_definition->extent.x0;
-	extent.x1 = window_definition->extent.x1;
-	extent.y0 = new_extent;
-	extent.y1 = window_definition->extent.y1;
+	os_box extent = {
+		.x0 = window_definition->extent.x0,
+		.x1 = window_definition->extent.x1,
+		.y0 = new_extent,
+		.y1 = window_definition->extent.y1
+	};
 
 	wimp_set_extent(instance->handle, &extent);
 }
