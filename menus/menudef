@@ -65,3 +65,13 @@ menu(ListWindowFileMenu, "File") {
 menu(ListWindowTestMenu, "Test") {
 	item("Info");
 }
+
+/* The Log Window Menu */
+
+menu(LogWindowMenu, "Unify") {
+	item("Save") {
+		d_box(SaveAs) {
+			warning;
+		}
+	}
+}

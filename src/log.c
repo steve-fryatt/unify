@@ -39,6 +39,7 @@
 #include <oslib/colourtrans.h>
 #include <oslib/font.h>
 #include <oslib/os.h>
+#include <oslib/osfile.h>
 #include <oslib/wimp.h>
 
 /* SF-Lib header files. */
@@ -48,6 +49,7 @@
 #include <sflib/event.h>
 #include <sflib/heap.h>
 #include <sflib/ihelp.h>
+#include <sflib/saveas.h>
 #include <sflib/templates.h>
 #include <sflib/windows.h>
 
@@ -56,6 +58,12 @@
 #include "log.h"
 
 #include "flexutils.h"
+
+/**
+ * The log window menu entries
+ */
+
+#define LOG_MENU_SAVE_LOG 0
 
 /* Structure definitions. */
 
@@ -114,6 +122,12 @@ struct log_instance {
 static wimp_window *log_window_definition = NULL;
 
 /**
+ * The Save As dialogue box for logs.
+ */
+
+static struct saveas_block *log_saveas_dialogue = NULL;
+
+/**
  * The window menu.
  */
 
@@ -134,8 +148,10 @@ static font_f log_bold_font = font_SYSTEM;
 /* Static function prototypes. */
 
 static void log_close_handler(wimp_close *close);
+static void log_menu_prepare_handler(wimp_w w, wimp_menu *menu, wimp_pointer *pointer);
+static void log_menu_warning_handler(wimp_w w, wimp_menu *menu, wimp_message_menu_warning *warning);
 static void log_redraw_handler(wimp_draw *redraw);
-
+static osbool log_save_file(char *filename, osbool selection, void *data);
 static os_error *log_find_fonts(void);
 static void log_lose_fonts(void);
 static os_error *log_paint_text(struct log_redraw *line_info, char *text, os_coord *pos);
@@ -152,8 +168,12 @@ void log_initialise(void)
 
 	/* Set up the log window menu and its dialogues. */
 
-//	log_window_menu = templates_get_menu("LogWindowMenu");
-//	ihelp_add_menu(log_window_menu, "LogMenu");
+	log_window_menu = templates_get_menu("LogWindowMenu");
+	ihelp_add_menu(log_window_menu, "LogMenu");
+
+	/* Set up the Save As dialogue. */
+
+	log_saveas_dialogue = saveas_create_dialogue(FALSE, "file_fff", osfile_TYPE_TEXT, log_save_file);
 }
 
 /**
@@ -246,13 +266,13 @@ void log_open_window(struct log_instance *instance)
 	ihelp_add_window(instance->handle, "LogWindow", NULL);
 
 	event_add_window_user_data(instance->handle, instance);
-//	event_add_window_menu(instance->handle, window_menu);
+	event_add_window_menu(instance->handle, log_window_menu);
 //	event_add_window_open_event(instance->handle, window_open_handler);
 	event_add_window_close_event(instance->handle, log_close_handler);
 //	event_add_window_mouse_event(instance->handle, window_click_handler);
-//	event_add_window_menu_prepare(instance->handle, window_menu_prepare);
-//	event_add_window_menu_warning(instance->handle, window_menu_warning);
-//	event_add_window_menu_selection(instance->handle, window_menu_selection);
+	event_add_window_menu_prepare(instance->handle, log_menu_prepare_handler);
+	event_add_window_menu_warning(instance->handle, log_menu_warning_handler);
+//	event_add_window_menu_selection(instance->handle, log_menu_selection_handler);
 //	event_add_window_menu_close(instance->handle, window_menu_close);
 	event_add_window_redraw_event(instance->handle, log_redraw_handler);
 //	event_add_window_scroll_event(instance->handle, window_scroll_handler);
@@ -289,6 +309,46 @@ static void log_close_handler(wimp_close *close)
 	wimp_delete_window(instance->handle);
 
 	instance->handle = NULL;
+}
+
+/**
+ * Handle requests to prepare the log menu.
+ *
+ * \param w			The window to which the menu belongs.
+ * \param *menu			Pointer to the menu itself.
+ * \param *pointer		Pointer to the pointer position data, or NULL
+ *				on a reopening.
+ */
+
+static void log_menu_prepare_handler(wimp_w w, wimp_menu *menu, wimp_pointer *pointer)
+{
+	struct window_instance *instance = event_get_window_user_data(w);
+	if (instance == NULL || menu != log_window_menu)
+		return;
+
+	saveas_initialise_dialogue(log_saveas_dialogue, NULL, "DefLogFile", NULL, FALSE, FALSE, instance);
+}
+
+/**
+ * Handle Message_MenuWarning events from the log menu.
+ *
+ * \param  w			The window to which the menu belongs.
+ * \param  *menu		Pointer to the menu itself.
+ * \param *warning		The submenu warning message data.
+ */
+
+static void log_menu_warning_handler(wimp_w w, wimp_menu *menu, wimp_message_menu_warning *warning)
+{
+	struct window_instance *instance = event_get_window_user_data(w);
+	if (instance == NULL || menu != log_window_menu)
+		return;
+
+	switch (warning->selection.items[0]) {
+	case LOG_MENU_SAVE_LOG:
+		saveas_prepare_dialogue(log_saveas_dialogue);
+		wimp_create_sub_menu(warning->sub_menu, warning->pos.x, warning->pos.y);
+		break;
+	}
 }
 
 /**
@@ -433,6 +493,33 @@ void log_finish_text(struct log_instance *instance)
 		while (i < instance->length && instance->text[i] == '\0')
 			i++;
 	}
+}
+
+/**
+ * Save the log to a file on disc.
+ *
+ * \param *filename		Pointer to the filename to save to.
+ * \param selection		TRUE if "selection" was ticked in the dialogue.
+ * \param *data			The saveas client data, which is a pointer to
+ *				the log instance.
+ * \return			TRUE if the save was successful; else FALSE.
+ */
+
+static osbool log_save_file(char *filename, osbool selection, void *data)
+{
+	struct log_instance *instance = data;
+	if (instance == NULL || filename == NULL)
+		return FALSE;
+
+	FILE *file = fopen(filename, "w");
+	if (file == NULL)
+		return FALSE;
+
+	osbool written = log_write_to_file(instance, file);
+
+	fclose(file);
+
+	return written;
 }
 
 /**

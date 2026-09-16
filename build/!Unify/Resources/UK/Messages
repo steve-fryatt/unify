@@ -95,4 +95,4 @@ Help.ListMenu.0002:\Rsave the log data from the test run of this file.
 Help.ListMenu.01:\Rto perform actions on this single test.
 Help.ListMenu.02:\Rto save all of the log data from the files in this test run.
 
-#Help.LogListMenu.??:\Sopen this log for analysis.
+Help.LogMenu.00:\Rsave the text from this log.

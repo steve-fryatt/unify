@@ -278,10 +278,10 @@ static void window_open_handler(wimp_open *open);
 static void window_close_handler(wimp_close *close);
 static void window_click_handler(wimp_pointer *pointer);
 static void window_toolbar_click_handler(wimp_pointer *pointer);
-static void window_menu_prepare(wimp_w w, wimp_menu *menu, wimp_pointer *pointer);
-static void window_menu_warning(wimp_w w, wimp_menu *menu, wimp_message_menu_warning *warning);
-static void window_menu_close(wimp_w w, wimp_menu *menu);
-static void window_menu_selection(wimp_w w, wimp_menu *menu, wimp_selection *selection);
+static void window_menu_prepare_handler(wimp_w w, wimp_menu *menu, wimp_pointer *pointer);
+static void window_menu_warning_handler(wimp_w w, wimp_menu *menu, wimp_message_menu_warning *warning);
+static void window_menu_close_handler(wimp_w w, wimp_menu *menu);
+static void window_menu_selection_handler(wimp_w w, wimp_menu *menu, wimp_selection *selection);
 static void window_redraw_handler(wimp_draw *redraw);
 static void window_scroll_handler(wimp_scroll *scroll);
 static osbool window_recalculate_columns(struct window_instance *instance, wimp_open *open);
@@ -416,10 +416,10 @@ struct window_instance *window_create_instance(struct window_definition *definit
 	event_add_window_open_event(instance->handle, window_open_handler);
 	event_add_window_close_event(instance->handle, window_close_handler);
 	event_add_window_mouse_event(instance->handle, window_click_handler);
-	event_add_window_menu_prepare(instance->handle, window_menu_prepare);
-	event_add_window_menu_warning(instance->handle, window_menu_warning);
-	event_add_window_menu_selection(instance->handle, window_menu_selection);
-	event_add_window_menu_close(instance->handle, window_menu_close);
+	event_add_window_menu_prepare(instance->handle, window_menu_prepare_handler);
+	event_add_window_menu_warning(instance->handle, window_menu_warning_handler);
+	event_add_window_menu_selection(instance->handle, window_menu_selection_handler);
+	event_add_window_menu_close(instance->handle, window_menu_close_handler);
 	event_add_window_redraw_event(instance->handle, window_redraw_handler);
 	event_add_window_scroll_event(instance->handle, window_scroll_handler);
 
@@ -428,10 +428,10 @@ struct window_instance *window_create_instance(struct window_definition *definit
 	event_add_window_user_data(instance->pane_handle, instance);
 	event_add_window_menu(instance->pane_handle, window_menu);
 	event_add_window_mouse_event(instance->pane_handle, window_toolbar_click_handler);
-	event_add_window_menu_prepare(instance->pane_handle, window_menu_prepare);
-	event_add_window_menu_warning(instance->pane_handle, window_menu_warning);
-	event_add_window_menu_selection(instance->pane_handle, window_menu_selection);
-	event_add_window_menu_close(instance->pane_handle, window_menu_close);
+	event_add_window_menu_prepare(instance->pane_handle, window_menu_prepare_handler);
+	event_add_window_menu_warning(instance->pane_handle, window_menu_warning_handler);
+	event_add_window_menu_selection(instance->pane_handle, window_menu_selection_handler);
+	event_add_window_menu_close(instance->pane_handle, window_menu_close_handler);
 
 	/* Open the windows. */
 
@@ -582,7 +582,7 @@ static void window_toolbar_click_handler(wimp_pointer *pointer)
 }
 
 /**
- * Handle selections from the window menu.
+ * Handle requests to prepare the window menu.
  *
  * \param w			The window to which the menu belongs.
  * \param *menu			Pointer to the menu itself.
@@ -590,7 +590,7 @@ static void window_toolbar_click_handler(wimp_pointer *pointer)
  *				on a reopening.
  */
 
-static void window_menu_prepare(wimp_w w, wimp_menu *menu, wimp_pointer *pointer)
+static void window_menu_prepare_handler(wimp_w w, wimp_menu *menu, wimp_pointer *pointer)
 {
 	struct window_instance *instance = event_get_window_user_data(w);
 	if (instance == NULL || menu != window_menu)
@@ -633,7 +633,7 @@ static void window_menu_prepare(wimp_w w, wimp_menu *menu, wimp_pointer *pointer
  * \param *warning		The submenu warning message data.
  */
 
-static void window_menu_warning(wimp_w w, wimp_menu *menu, wimp_message_menu_warning *warning)
+static void window_menu_warning_handler(wimp_w w, wimp_menu *menu, wimp_message_menu_warning *warning)
 {
 	struct window_instance *instance = event_get_window_user_data(w);
 	if (instance == NULL || menu != window_menu)
@@ -667,7 +667,7 @@ static void window_menu_warning(wimp_w w, wimp_menu *menu, wimp_message_menu_war
  * \param *selection		Pointer to the Wimp menu selction block.
  */
 
-static void window_menu_selection(wimp_w w, wimp_menu *menu, wimp_selection *selection)
+static void window_menu_selection_handler(wimp_w w, wimp_menu *menu, wimp_selection *selection)
 {
 	struct window_instance *instance = event_get_window_user_data(w);
 	if (instance == NULL || menu != window_menu)
@@ -695,7 +695,7 @@ static void window_menu_selection(wimp_w w, wimp_menu *menu, wimp_selection *sel
  * \param *menu			Pointer to the menu itself.
  */
 
-static void window_menu_close(wimp_w w, wimp_menu *menu)
+static void window_menu_close_handler(wimp_w w, wimp_menu *menu)
 {
 	if (menu != window_menu)
 		return;
@@ -1398,7 +1398,13 @@ static void window_populate_file_info_dialogue(struct window_instance *instance,
 }
 
 /**
- * TODO
+ * Save a specific log file from within the window to disc.
+ *
+ * \param *filename		Pointer to the filename to save to.
+ * \param selection		TRUE if "selection" was ticked in the dialogue.
+ * \param *data			The saveas client data, which is a pointer to
+ *				the window instance.
+ * \return			TRUE if the save was successful; else FALSE.
  */
 
 static osbool window_save_log(char *filename, osbool selection, void *data)
@@ -1416,7 +1422,13 @@ static osbool window_save_log(char *filename, osbool selection, void *data)
 }
 
 /**
- * TODO
+ * Save all of the log files within the window as a single file.
+ *
+ * \param *filename		Pointer to the filename to save to.
+ * \param selection		TRUE if "selection" was ticked in the dialogue.
+ * \param *data			The saveas client data, which is a pointer to
+ *				the window instance.
+ * \return			TRUE if the save was successful; else FALSE.
  */
 
 static osbool window_save_logs(char *filename, osbool selection, void *data)
