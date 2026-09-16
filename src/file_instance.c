@@ -600,9 +600,20 @@ void file_instance_validate_files(struct file_instance_block *instance)
 	}
 
 	if (instance->status == FILE_INSTANCE_STATUS_READY_TO_RUN) { // TODO - Remove this!!!
+		char *sample[] = {
+			"This is some text\nand",
+			" this is some more.\n",
+			"We\ncan\nhave\nlots\nof\nshort\nlines\n",
+			"12345678901234567890123456789012345678901234567890123456789012345678901234567890",
+			"\n",
+			"12345678901234567890123456789012345678901234567890123456789012345678901234567890",
+			" And a very long line to end!",
+			NULL
+		};
+
 		instance->log = log_create_instance();
-		log_add_text(instance->log, "This is some text\nand", 21);
-		log_add_text(instance->log, " this is some more", 18);
+		for (int i = 0; sample[i] != NULL; i++)
+			log_add_text(instance->log, sample[i], strlen(sample[i]));
 		log_finish_text(instance->log);
 	}
 }
