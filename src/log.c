@@ -72,9 +72,9 @@
  */
 
 struct log_redraw {
-	unsigned offset;
-	os_colour colour;
-	osbool bold;
+	unsigned offset;	/**< Offset into the text area for the text.	*/
+	os_colour colour;	/**< The colour of the line.			*/
+	osbool bold;		/**< Should the text be bold?			*/
 };
 
 /**
@@ -96,6 +96,11 @@ struct log_instance {
 	 * The handle of the log window.
 	 */
 	wimp_w handle;
+
+	/**
+	 * The window title for the log.
+	 */
+	char *title;
 
 	/**
 	 * A flex block containing all of the log text.
@@ -228,10 +233,11 @@ void log_initialise(void)
 /**
  * Create a new log instance.
  *
+ * \param *title		Pointer to the title to use for the log.
  * \return			Pointer to the new instance, or NULL on failure.
  */
 
-struct log_instance *log_create_instance(void)
+struct log_instance *log_create_instance(char *title)
 {
 	/* Allocate the instance memory. */
 
@@ -240,6 +246,7 @@ struct log_instance *log_create_instance(void)
 		return NULL;
 
 	instance->handle = NULL;
+	instance->title = NULL;
 
 	instance->lines = NULL;
 	instance->line_count = 0;
@@ -250,6 +257,14 @@ struct log_instance *log_create_instance(void)
 
 	instance->font_size = 192; // 12pt
 	instance->linespace = 130;
+
+	/* Store the window title. */
+
+	instance->title = heap_strdup(title);
+	if (instance->title == NULL) {
+		log_delete_instance(instance);
+		return NULL;
+	}
 
 	/* Allocate the flex blocks. */
 
@@ -284,6 +299,9 @@ void log_delete_instance(struct log_instance *instance)
 
 	/* Free the memory used. */
 
+	if (instance->title != NULL)
+		heap_free(instance->title);
+
 	flexutils_free((void **) &(instance->lines));
 	flexutils_free((void **) &(instance->text));
 
@@ -309,6 +327,11 @@ void log_open_window(struct log_instance *instance)
 	}
 	/* Create the new window. */
 
+	log_window_definition->title_data.indirected_text.text =
+			(instance->title != NULL) ? instance->title : "";
+	log_window_definition->title_data.indirected_text.size =
+			strlen(log_window_definition->title_data.indirected_text.text);
+
 	os_error *error = xwimp_create_window(log_window_definition, &(instance->handle));
 	if (error != NULL) {
 		error_report_os_error(error, wimp_ERROR_BOX_CANCEL_ICON);
@@ -319,30 +342,15 @@ void log_open_window(struct log_instance *instance)
 
 	event_add_window_user_data(instance->handle, instance);
 	event_add_window_menu(instance->handle, log_window_menu);
-//	event_add_window_open_event(instance->handle, window_open_handler);
 	event_add_window_close_event(instance->handle, log_close_handler);
-//	event_add_window_mouse_event(instance->handle, window_click_handler);
 	event_add_window_menu_prepare(instance->handle, log_menu_prepare_handler);
 	event_add_window_menu_warning(instance->handle, log_menu_warning_handler);
-//	event_add_window_menu_selection(instance->handle, log_menu_selection_handler);
-//	event_add_window_menu_close(instance->handle, window_menu_close);
 	event_add_window_redraw_event(instance->handle, log_redraw_handler);
-//	event_add_window_scroll_event(instance->handle, window_scroll_handler);
 
-	/* Open the windows. */
-
-//	wimp_window_state window = { .w = instance->handle };
-//	wimp_get_window_state(&window);
-//	window_recalculate_columns(instance, (wimp_open *) &window);
-//	window.next = wimp_TOP;
-//	wimp_open_window((wimp_open *) &window);
+	/* Open the window. */
 
 	log_set_window_extent(instance);
-
 	windows_open(instance->handle);
-
-//	windows_open_nested_as_toolbar(instance->pane_handle, instance->handle, instance->pane_size, FALSE);
-//	window_position_toolbar_icons((wimp_open *) &window, instance);
 }
 
 /**
@@ -439,8 +447,6 @@ static void log_redraw_handler(wimp_draw *redraw)
 			if (base >= instance->line_count)
 				base = instance->line_count - 1;
 
-			debug_printf("Redrawing lines %d to %d", top, base);
-
 			for (int y = top; y <= base; y++) {
 				pos.y = oy - ((y + 1) * row_height);
 				log_paint_text(instance->lines + y, instance->text, &pos);
@@ -454,12 +460,18 @@ static void log_redraw_handler(wimp_draw *redraw)
 }
 
 /**
- * TODO
+ * Add a block of text to the log instance. Text may contain control characters,
+ * and does not need to be terminated: the specified number of bytes will be
+ * copied.
+ *
+ * \param *instance		Pointer to the instance to take the text.
+ * \param *content		Pointer to the content to be added.
+ * \param length		The number of bytes in the content.
  */
 
 void log_add_text(struct log_instance *instance, char *content, size_t length)
 {
-	if (instance == NULL || content == NULL || length == 0)
+	if (instance == NULL || content == NULL || length == 0 || instance->length < 0)
 		return;
 
 	/* Make sure that we have enough space. Add 1 to the space so that at the
@@ -490,12 +502,15 @@ void log_add_text(struct log_instance *instance, char *content, size_t length)
 }
 
 /**
- * TODO
+ * Complete the addition of text to the log instance. This will cause the
+ * content to be formatted and prepared for display.
+ *
+ * \param *instance		Pointer to the instance to be completed.
  */
 
 void log_finish_text(struct log_instance *instance)
 {
-	if (instance == NULL || instance->text == NULL)
+	if (instance == NULL || instance->text == NULL || instance->length < 0)
 		return;
 
 	/* Terminate the log content with a zero byte, in case there isn't one. */
@@ -553,6 +568,10 @@ void log_finish_text(struct log_instance *instance)
 		while (i < instance->length && instance->text[i] == '\0')
 			i++;
 	}
+
+	/* Close the log off to future updates. */
+
+	instance->length = -1;
 }
 
 /**
@@ -809,9 +828,11 @@ static os_error *log_paint_text(struct log_redraw *line_info, char *text, os_coo
 	if (line_info == NULL || text == NULL || font == font_SYSTEM)
 		return NULL;
 
-	os_error *error = xcolourtrans_set_font_colours(font, os_COLOUR_VERY_LIGHT_GREY, line_info->colour, 14, NULL, NULL, NULL);
+	os_error *error = xcolourtrans_set_font_colours(font, os_COLOUR_VERY_LIGHT_GREY,
+			line_info->colour, 14, NULL, NULL, NULL);
 	if (error != NULL)
 		return error;
 
-	return xfont_paint(font, text + line_info->offset, font_OS_UNITS | font_KERN | font_GIVEN_FONT, pos->x, pos->y, NULL, NULL, 0);
+	return xfont_paint(font, text + line_info->offset, font_OS_UNITS | font_KERN | font_GIVEN_FONT,
+			pos->x, pos->y, NULL, NULL, 0);
 }

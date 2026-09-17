@@ -611,7 +611,7 @@ void file_instance_validate_files(struct file_instance_block *instance)
 			NULL
 		};
 
-		instance->log = log_create_instance();
+		instance->log = log_create_instance("This is a log");
 		for (int i = 0; sample[i] != NULL; i++)
 			log_add_text(instance->log, sample[i], strlen(sample[i]));
 		log_finish_text(instance->log);

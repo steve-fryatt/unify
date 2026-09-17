@@ -47,10 +47,11 @@ void log_initialise(void);
 /**
  * Create a new log instance.
  *
+ * \param *title		Pointer to the title to use for the log.
  * \return			Pointer to the new instance, or NULL on failure.
  */
 
-struct log_instance *log_create_instance(void);
+struct log_instance *log_create_instance(char *title);
 
 /**
  * Destroy a log instance.
@@ -69,13 +70,22 @@ void log_delete_instance(struct log_instance *instance);
 void log_open_window(struct log_instance *instance);
 
 /**
- * TODO
+ * Add a block of text to the log instance. Text may contain control characters,
+ * and does not need to be terminated: the specified number of bytes will be
+ * copied.
+ *
+ * \param *instance		Pointer to the instance to take the text.
+ * \param *content		Pointer to the content to be added.
+ * \param length		The number of bytes in the content.
  */
 
 void log_add_text(struct log_instance *instance, char *content, size_t length);
 
 /**
- * TODO
+ * Complete the addition of text to the log instance. This will cause the
+ * content to be formatted and prepared for display.
+ *
+ * \param *instance		Pointer to the instance to be completed.
  */
 
 void log_finish_text(struct log_instance *instance);
