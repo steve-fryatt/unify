@@ -31,6 +31,8 @@
 #define UNIFY_FILE_INSTANCE
 
 #include <stdint.h>
+#include <stdio.h>
+#include <oslib/types.h>
 #include <oslib/osgbpb.h>
 
 /**
@@ -72,6 +74,7 @@ struct file_instance_object_details {
 	uint64_t source_timestamp;
 	unsigned executable_filename;
 	uint64_t executable_timestamp;
+	osbool has_log;
 };
 
 /**
@@ -158,6 +161,35 @@ osbool file_instance_get_object_details(struct file_instance_block *instance, st
  */
 
 osbool file_instance_has_source(struct file_instance_block *instance);
+
+/**
+ * Report whether a file instance has a log associated with it.
+ *
+ * \param *instance	Pointer to the instance of interest.
+ * \return		TRUE if a log is available; otherwise FALSE.
+ */
+
+osbool file_instance_has_log(struct file_instance_block *instance);
+
+/**
+ * Open the log for a file instance.
+ *
+ * \param *instance	Pointer to the instance of intest.
+ * \return		TRUE if the log was opened; else FALSE.
+ */
+
+osbool file_instance_open_log(struct file_instance_block *instance);
+
+/**
+ * Write the log file for an instance to a file handle.
+ *
+ * \param *instance	Pointer to the instance of interest.
+ * \param *file		The file handle to write to.
+ * \param header	TRUE to write a header for the file; else FALSE.
+ * \return		TRUE if the log was written; else FALSE.
+ */
+
+osbool file_instance_save_log(struct file_instance_block *instance, FILE *file, osbool header);
 
 /**
  * Compare the details of an object found on disc with those stored in a

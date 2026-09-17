@@ -41,7 +41,11 @@ menu(ListWindowMenu, "Unify") {
 		submenu(ListWindowTestMenu);
 		dotted;
 	}
-	item("Save Logs");
+	item("Save Logs") {
+		d_box(SaveAs) {
+			warning;
+		}
+	}
 }
 
 menu(ListWindowFileMenu, "File") {
@@ -51,9 +55,23 @@ menu(ListWindowFileMenu, "File") {
 		}
 	}
 	item("View Log...");
-	item("Save Log");
+	item("Save Log") {
+		d_box(SaveAs) {
+			warning;
+		}
+	}
 }
 
 menu(ListWindowTestMenu, "Test") {
 	item("Info");
+}
+
+/* The Log Window Menu */
+
+menu(LogWindowMenu, "Unify") {
+	item("Save") {
+		d_box(SaveAs) {
+			warning;
+		}
+	}
 }

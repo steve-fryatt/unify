@@ -40,9 +40,8 @@
 
 /* OSLib header files */
 
-#include <oslib/colourtrans.h>
-#include <oslib/font.h>
 #include <oslib/os.h>
+#include <oslib/osfile.h>
 #include <oslib/osspriteop.h>
 #include <oslib/wimp.h>
 
@@ -55,6 +54,7 @@
 #include <sflib/icons.h>
 #include <sflib/ihelp.h>
 #include <sflib/menus.h>
+#include <sflib/saveas.h>
 #include <sflib/string.h>
 #include <sflib/templates.h>
 #include <sflib/windows.h>
@@ -237,6 +237,18 @@ static wimp_window *window_definition = NULL;
 static wimp_window *window_pane_definition = NULL;
 
 /**
+ * The Save As dialogue box for log files.
+ */
+
+static struct saveas_block *window_log_saveas_dialogue = NULL;
+
+/**
+ * The Save As dialogue box for log collection files.
+ */
+
+static struct saveas_block *window_logs_saveas_dialogue = NULL;
+
+/**
  * The window menu.
  */
 
@@ -260,28 +272,16 @@ static int window_menu_entry = -1;
 
 static wimp_i window_menu_icon = wimp_ICON_WINDOW;
 
-/**
- * The font handle for normal text.
- */
-
-static font_f window_normal_font = font_SYSTEM;
-
-/**
- * The font handle for bold text.
- */
-
-static font_f window_bold_font = font_SYSTEM;
-
 /* Static function prototypes. */
 
 static void window_open_handler(wimp_open *open);
 static void window_close_handler(wimp_close *close);
 static void window_click_handler(wimp_pointer *pointer);
 static void window_toolbar_click_handler(wimp_pointer *pointer);
-static void window_menu_prepare(wimp_w w, wimp_menu *menu, wimp_pointer *pointer);
-static void window_menu_warning(wimp_w w, wimp_menu *menu, wimp_message_menu_warning *warning);
-static void window_menu_close(wimp_w w, wimp_menu *menu);
-static void window_menu_selection(wimp_w w, wimp_menu *menu, wimp_selection *selection);
+static void window_menu_prepare_handler(wimp_w w, wimp_menu *menu, wimp_pointer *pointer);
+static void window_menu_warning_handler(wimp_w w, wimp_menu *menu, wimp_message_menu_warning *warning);
+static void window_menu_close_handler(wimp_w w, wimp_menu *menu);
+static void window_menu_selection_handler(wimp_w w, wimp_menu *menu, wimp_selection *selection);
 static void window_redraw_handler(wimp_draw *redraw);
 static void window_scroll_handler(wimp_scroll *scroll);
 static osbool window_recalculate_columns(struct window_instance *instance, wimp_open *open);
@@ -294,6 +294,8 @@ static void window_force_redraw_fold(struct window_instance *instance, int fold)
 static void window_force_redraw_fold_to_end(struct window_instance *instance, int fold);
 static void window_force_redraw_lines(struct window_instance *instance, int first, int last);
 static void window_populate_file_info_dialogue(struct window_instance *instance, int fold);
+static osbool window_save_log(char *filename, osbool selection, void *data);
+static osbool window_save_logs(char *filename, osbool selection, void *data);
 static void window_decode_interactive_help(char *buffer, wimp_w window, wimp_i icon, os_coord pos, wimp_mouse_state buttons);
 static osbool window_decode_click_data(struct window_instance *instance, os_coord pos, int *fold, int *entry, wimp_i *icon);
 static osbool window_get_rows_from_fold(struct window_instance *instance, int fold, int *top, int *bottom);
@@ -323,13 +325,18 @@ void window_initialise(osspriteop_area *sprites)
 
 	window_menu = templates_get_menu("ListWindowMenu");
 	ihelp_add_menu(window_menu, "ListMenu");
+
+	/* Set up the Save As dialogue. */
+
+	window_log_saveas_dialogue = saveas_create_dialogue(FALSE, "file_fff", osfile_TYPE_TEXT, window_save_log);
+	window_logs_saveas_dialogue = saveas_create_dialogue(FALSE, "file_fff", osfile_TYPE_TEXT, window_save_logs);
 }
 
 
 /**
  * Create a new window instance.
  *
- * \param *pane_definition	Pointer to the window definition.
+ * \param *definition		Pointer to the window definition.
  * \param *client_data		Pointer to the client data, or NULL for none.
  * \return			Pointer to the new instance, or NULL on failure.
  */
@@ -400,6 +407,8 @@ struct window_instance *window_create_instance(struct window_definition *definit
 		return NULL;
 	}
 
+	/* Register the window details */
+
 	ihelp_add_window(instance->handle, "ListWindow", window_decode_interactive_help);
 
 	event_add_window_user_data(instance->handle, instance);
@@ -407,10 +416,10 @@ struct window_instance *window_create_instance(struct window_definition *definit
 	event_add_window_open_event(instance->handle, window_open_handler);
 	event_add_window_close_event(instance->handle, window_close_handler);
 	event_add_window_mouse_event(instance->handle, window_click_handler);
-	event_add_window_menu_prepare(instance->handle, window_menu_prepare);
-	event_add_window_menu_warning(instance->handle, window_menu_warning);
-	event_add_window_menu_selection(instance->handle, window_menu_selection);
-	event_add_window_menu_close(instance->handle, window_menu_close);
+	event_add_window_menu_prepare(instance->handle, window_menu_prepare_handler);
+	event_add_window_menu_warning(instance->handle, window_menu_warning_handler);
+	event_add_window_menu_selection(instance->handle, window_menu_selection_handler);
+	event_add_window_menu_close(instance->handle, window_menu_close_handler);
 	event_add_window_redraw_event(instance->handle, window_redraw_handler);
 	event_add_window_scroll_event(instance->handle, window_scroll_handler);
 
@@ -419,16 +428,14 @@ struct window_instance *window_create_instance(struct window_definition *definit
 	event_add_window_user_data(instance->pane_handle, instance);
 	event_add_window_menu(instance->pane_handle, window_menu);
 	event_add_window_mouse_event(instance->pane_handle, window_toolbar_click_handler);
-	event_add_window_menu_prepare(instance->pane_handle, window_menu_prepare);
-	event_add_window_menu_warning(instance->pane_handle, window_menu_warning);
-	event_add_window_menu_selection(instance->pane_handle, window_menu_selection);
-	event_add_window_menu_close(instance->pane_handle, window_menu_close);
+	event_add_window_menu_prepare(instance->pane_handle, window_menu_prepare_handler);
+	event_add_window_menu_warning(instance->pane_handle, window_menu_warning_handler);
+	event_add_window_menu_selection(instance->pane_handle, window_menu_selection_handler);
+	event_add_window_menu_close(instance->pane_handle, window_menu_close_handler);
 
 	/* Open the windows. */
 
-	wimp_window_state window;
-
-	window.w = instance->handle;
+	wimp_window_state window = { .w = instance->handle };
 	wimp_get_window_state(&window);
 	window_recalculate_columns(instance, (wimp_open *) &window);
 	window.next = wimp_TOP;
@@ -575,7 +582,7 @@ static void window_toolbar_click_handler(wimp_pointer *pointer)
 }
 
 /**
- * Handle selections from the window menu.
+ * Handle requests to prepare the window menu.
  *
  * \param w			The window to which the menu belongs.
  * \param *menu			Pointer to the menu itself.
@@ -583,7 +590,7 @@ static void window_toolbar_click_handler(wimp_pointer *pointer)
  *				on a reopening.
  */
 
-static void window_menu_prepare(wimp_w w, wimp_menu *menu, wimp_pointer *pointer)
+static void window_menu_prepare_handler(wimp_w w, wimp_menu *menu, wimp_pointer *pointer)
 {
 	struct window_instance *instance = event_get_window_user_data(w);
 	if (instance == NULL || menu != window_menu)
@@ -598,10 +605,24 @@ static void window_menu_prepare(wimp_w w, wimp_menu *menu, wimp_pointer *pointer
 		}
 	}
 
+	saveas_initialise_dialogue(window_log_saveas_dialogue, NULL, "DefLogFile", NULL, FALSE, FALSE, instance);
+	saveas_initialise_dialogue(window_logs_saveas_dialogue, NULL, "DefLogsFile", NULL, FALSE, FALSE, instance);
+
+	osbool this_log = FALSE, any_logs = FALSE;
+
+	if (instance->definition->callback_file_has_log != NULL)
+		(instance->definition->callback_file_has_log(window_menu_fold, instance->client_data, &this_log, &any_logs));
+
 	menus_shade_entry(menu, WINDOW_MENU_FILE,
 			(window_menu_icon == wimp_ICON_WINDOW || window_menu_fold == -1) ? TRUE : FALSE);
 	menus_shade_entry(menu, WINDOW_MENU_TEST,
 			(window_menu_icon == wimp_ICON_WINDOW || window_menu_fold == -1 || window_menu_entry == -1) ? TRUE : FALSE);
+	menus_shade_entry(menu, WINDOW_MENU_SAVE_LOGS,
+			(any_logs == FALSE) ? TRUE : FALSE);
+	menus_shade_entry(menu->entries[WINDOW_MENU_FILE].sub_menu, WINDOW_MENU_FILE_VIEW_LOG,
+			(window_menu_icon == wimp_ICON_WINDOW || this_log == FALSE) ? TRUE : FALSE);
+	menus_shade_entry(menu->entries[WINDOW_MENU_FILE].sub_menu, WINDOW_MENU_FILE_SAVE_LOG,
+			(window_menu_icon == wimp_ICON_WINDOW || this_log == FALSE) ? TRUE : FALSE);
 }
 
 /**
@@ -612,7 +633,7 @@ static void window_menu_prepare(wimp_w w, wimp_menu *menu, wimp_pointer *pointer
  * \param *warning		The submenu warning message data.
  */
 
-static void window_menu_warning(wimp_w w, wimp_menu *menu, wimp_message_menu_warning *warning)
+static void window_menu_warning_handler(wimp_w w, wimp_menu *menu, wimp_message_menu_warning *warning)
 {
 	struct window_instance *instance = event_get_window_user_data(w);
 	if (instance == NULL || menu != window_menu)
@@ -625,7 +646,15 @@ static void window_menu_warning(wimp_w w, wimp_menu *menu, wimp_message_menu_war
 			window_populate_file_info_dialogue(instance, window_menu_fold);
 			wimp_create_sub_menu(warning->sub_menu, warning->pos.x, warning->pos.y);
 			break;
+		case WINDOW_MENU_FILE_SAVE_LOG:
+			saveas_prepare_dialogue(window_log_saveas_dialogue);
+			wimp_create_sub_menu(warning->sub_menu, warning->pos.x, warning->pos.y);
+			break;
 		}
+		break;
+	case WINDOW_MENU_SAVE_LOGS:
+		saveas_prepare_dialogue(window_logs_saveas_dialogue);
+		wimp_create_sub_menu(warning->sub_menu, warning->pos.x, warning->pos.y);
 		break;
 	}
 }
@@ -638,7 +667,7 @@ static void window_menu_warning(wimp_w w, wimp_menu *menu, wimp_message_menu_war
  * \param *selection		Pointer to the Wimp menu selction block.
  */
 
-static void window_menu_selection(wimp_w w, wimp_menu *menu, wimp_selection *selection)
+static void window_menu_selection_handler(wimp_w w, wimp_menu *menu, wimp_selection *selection)
 {
 	struct window_instance *instance = event_get_window_user_data(w);
 	if (instance == NULL || menu != window_menu)
@@ -647,18 +676,16 @@ static void window_menu_selection(wimp_w w, wimp_menu *menu, wimp_selection *sel
 	wimp_pointer		pointer;
 	wimp_get_pointer_info(&pointer);
 
-//	switch(selection->items[0]) {
-//	case ICONBAR_MENU_HELP:
-//		error = xos_cli("%Filer_Run <Unify$Dir>.!Help");
-//		if (error != NULL)
-//			error_report_os_error(error, wimp_ERROR_BOX_OK_ICON);
-//		break;
-
-//	case ICONBAR_MENU_QUIT:
-//		if (!main_check_for_unsaved_data())
-//			main_quit_flag = TRUE;
-//		break;
-//	}
+	switch(selection->items[0]) {
+	case WINDOW_MENU_FILE:
+		switch (selection->items[1]) {
+		case WINDOW_MENU_FILE_VIEW_LOG:
+			if (instance->definition->callback_open_log_viewer != NULL && window_menu_fold != -1)
+				instance->definition->callback_open_log_viewer(window_menu_fold, instance->client_data);
+			break;
+		}
+		break;
+	}
 }
 
 /**
@@ -668,7 +695,7 @@ static void window_menu_selection(wimp_w w, wimp_menu *menu, wimp_selection *sel
  * \param *menu			Pointer to the menu itself.
  */
 
-static void window_menu_close(wimp_w w, wimp_menu *menu)
+static void window_menu_close_handler(wimp_w w, wimp_menu *menu)
 {
 	if (menu != window_menu)
 		return;
@@ -1263,12 +1290,12 @@ static void window_set_extent(struct window_instance *instance)
 
 	/* Call Wimp_SetExtent to update the extent, safe in the knowledge that the visible area will still exist. */
 
-	os_box extent;
-
-	extent.x0 = window_definition->extent.x0;
-	extent.x1 = window_definition->extent.x1;
-	extent.y0 = new_extent;
-	extent.y1 = window_definition->extent.y1;
+	os_box extent = {
+		.x0 = window_definition->extent.x0,
+		.x1 = window_definition->extent.x1,
+		.y0 = new_extent,
+		.y1 = window_definition->extent.y1
+	};
 
 	wimp_set_extent(instance->handle, &extent);
 }
@@ -1368,6 +1395,54 @@ static void window_populate_file_info_dialogue(struct window_instance *instance,
 		return;
 
 	file_dialogue_populate(&data);
+}
+
+/**
+ * Save a specific log file from within the window to disc.
+ *
+ * \param *filename		Pointer to the filename to save to.
+ * \param selection		TRUE if "selection" was ticked in the dialogue.
+ * \param *data			The saveas client data, which is a pointer to
+ *				the window instance.
+ * \return			TRUE if the save was successful; else FALSE.
+ */
+
+static osbool window_save_log(char *filename, osbool selection, void *data)
+{
+	struct window_instance *instance = data;
+	if (instance == NULL || filename == NULL || window_menu_fold == -1)
+		return FALSE;
+
+	debug_printf("Save log to %s", filename);
+
+	if (instance->definition->callback_save_log != NULL)
+		return instance->definition->callback_save_log(window_menu_fold, filename, instance->client_data);
+
+	return TRUE;
+}
+
+/**
+ * Save all of the log files within the window as a single file.
+ *
+ * \param *filename		Pointer to the filename to save to.
+ * \param selection		TRUE if "selection" was ticked in the dialogue.
+ * \param *data			The saveas client data, which is a pointer to
+ *				the window instance.
+ * \return			TRUE if the save was successful; else FALSE.
+ */
+
+static osbool window_save_logs(char *filename, osbool selection, void *data)
+{
+	struct window_instance *instance = data;
+	if (instance == NULL || filename == NULL)
+		return FALSE;
+
+	debug_printf("Save logs to %s", filename);
+
+	if (instance->definition->callback_save_all_logs != NULL)
+		return instance->definition->callback_save_all_logs(filename, instance->client_data);
+
+	return TRUE;
 }
 
 /**
@@ -1729,77 +1804,5 @@ static void window_format_numeric_data(struct window_redraw *value, char *buffer
 }
 
 
-/**
- * Find the fonts required to plot into a window.
- *
- * \return			Pointer to an error block, or NULL if successful.
- */
-
-static os_error *window_find_fonts(void)
-{
-	os_error *error = NULL;
-	int size = 192; // 12 pt
-
-	if (window_normal_font == 0 && error == NULL) {
-		error = xfont_find_font("Corpus.Medium", size, size, 0, 0, &window_normal_font, NULL, NULL);
-		if (error != NULL)
-			window_normal_font = font_SYSTEM;
-	}
-
-	if (window_bold_font == 0 && error == NULL) {
-		error = xfont_find_font("Corpus.Bold", size, size, 0, 0, &window_bold_font, NULL, NULL);
-		if (error != NULL)
-			window_bold_font = font_SYSTEM;
-	}
-
-	return error;
-}
-
-
-/**
- * Lose the fonts used to plot into a window.
- */
-
-static void window_lose_fonts(void)
-{
-	if (window_normal_font != 0)
-		font_lose_font(window_normal_font);
-
-	if (window_bold_font != 0)
-		font_lose_font(window_bold_font);
-
-	window_normal_font = font_SYSTEM;
-	window_bold_font = font_SYSTEM;
-}
-
-
-/**
- * Paint a line into a window.
- *
- * \param *line_info		Pointer to the line details.
- * \param *text			Pointer to an alternative text line, when required.
- * \param *pos			Pointer to a coordinate block.
- * \return			Pointer to an error block, or NULL if successful.
- */
-
-static os_error *window_paint_text(struct window_redraw *line_info, char *text, os_coord *pos)
-{
-	os_error *error;
-	font_f font;
-
-	if (line_info == NULL)
-		return NULL;
-
-	font = (line_info->bold == TRUE) ? window_bold_font : window_normal_font;
-
-	if (text == NULL || font == font_SYSTEM)
-		return NULL;
-
-	error = xcolourtrans_set_font_colours(font, os_COLOUR_VERY_LIGHT_GREY, line_info->colour, 14, NULL, NULL, NULL);
-	if (error != NULL)
-		return error;
-
-	return xfont_paint(font, text, font_OS_UNITS | font_KERN | font_GIVEN_FONT, pos->x, pos->y, NULL, NULL, 0);
-}
 
 #endif

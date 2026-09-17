@@ -126,6 +126,26 @@ struct window_definition {
 	osbool (*callback_fileinfo)(int fold, struct file_dialogue_data *info, void *data);
 
 	/**
+	 * Callback for requesting the presence of log data.
+	 */
+	void (*callback_file_has_log)(int fold, void *data, osbool *this_log, osbool *any_log);
+
+	/**
+	 * Callback to request that a log viewer is opened.
+	 */
+	void (*callback_open_log_viewer)(int fold, void *data);
+
+	/**
+	 * Callback to request that a specific log is saved.
+	 */
+	osbool (*callback_save_log)(int fold, char* filename, void *data);
+
+	/**
+	 * Callback to request that all logs are saved.
+	 */
+	osbool (*callback_save_all_logs)(char *filename, void *data);
+
+	/**
 	 * Callback for navigating around test runs.
 	 */
 	void (*callback_navigate)(enum window_navigation_target target, void *data);
@@ -164,7 +184,7 @@ void window_initialise(osspriteop_area *sprites);
 /**
  * Create a new window instance.
  *
- * \param *pane_definition	Pointer to the window definition.
+ * \param *definition		Pointer to the window definition.
  * \param *client_data		Pointer to the client data, or NULL for none.
  * \return			Pointer to the new instance, or NULL on failure.
  */

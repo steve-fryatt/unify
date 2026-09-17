@@ -127,6 +127,10 @@ static void suite_close_handler(void *data);
 static void suite_navigation_handler(enum window_navigation_target target, void *data);
 static void suite_run_handler(osbool full, void *data);
 static osbool suite_redraw_line_handler(int fold, int entry, struct window_line *content, void *data);
+static void suite_object_has_log(int fold, void *data, osbool *this_log, osbool *any_log);
+static void suite_object_open_log(int fold, void *data);
+static osbool suite_object_save_log(int fold, char *filename, void *data);
+static osbool suite_object_save_all_logs(char *filename, void *data);
 static osbool suite_object_info_handler(int fold, struct file_dialogue_data *info, void *data);
 
 /* The Test Suite window definiton. */
@@ -136,6 +140,10 @@ static struct window_definition suite_window_definition = {
 	.callback_close = suite_close_handler,
 	.callback_redraw = suite_redraw_line_handler,
 	.callback_fileinfo = suite_object_info_handler,
+	.callback_file_has_log = suite_object_has_log,
+	.callback_open_log_viewer = suite_object_open_log,
+	.callback_save_log = suite_object_save_log,
+	.callback_save_all_logs = suite_object_save_all_logs,
 	.callback_navigate = suite_navigation_handler,
 	.callback_run = suite_run_handler
 };
@@ -513,6 +521,79 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 		content->status = WINDOW_STATUS_UNKNOWN;
 	}
 	return TRUE;
+}
+
+/**
+ * Handle log presence request events from an instance window.
+ *
+ * \param fold		The index of the fold containing the line.
+ * \param *data		Pointer to our client data, which should be a
+ *			pointer to an instance.
+ * \param *this_log	Pointer to a variable in which to return TRUE
+ *			or FALSE for the specific entry log.
+ * \param *any_logs	Pointer to a variable in which to return TRUE
+ *			or FALSE for any log in the set.
+ */
+
+static void suite_object_has_log(int fold, void *data, osbool *this_log, osbool *any_log)
+{
+	struct suite_block *instance = data;
+	if (instance == NULL)
+		return;
+
+	file_set_get_object_log_status(instance->current_file_set, fold, this_log, any_log);
+}
+
+/**
+ * Handle log open request events from an instance window.
+ *
+ * \param fold		The index of the fold containing the line.
+ * \param *data		Pointer to our client data, which should be a
+ *			pointer to an instance.
+ */
+
+static void suite_object_open_log(int fold, void *data)
+{
+	struct suite_block *instance = data;
+	if (instance == NULL)
+		return;
+
+	file_set_open_object_log(instance->current_file_set, fold);
+}
+
+/**
+ * Handle log save request events from an instance window.
+ *
+ * \param fold		The index of the fold containing the line.
+ * \param *filename	Pointer to the filename to save to.
+ * \param *data		Pointer to our client data, which should be a
+ *			pointer to an instance.
+ */
+
+static osbool suite_object_save_log(int fold, char *filename, void *data)
+{
+	struct suite_block *instance = data;
+	if (instance == NULL)
+		return FALSE;
+
+	return file_set_save_object_log(instance->current_file_set, fold, filename);
+}
+
+/**
+ * Handle all log save request events from an instance window.
+ *
+ * \param *filename	Pointer to the filename to save to.
+ * \param *data		Pointer to our client data, which should be a
+ *			pointer to an instance.
+ */
+
+static osbool suite_object_save_all_logs(char *filename, void *data)
+{
+	struct suite_block *instance = data;
+	if (instance == NULL)
+		return FALSE;
+
+	return file_set_save_all_logs(instance->current_file_set, filename);
 }
 
 /**
