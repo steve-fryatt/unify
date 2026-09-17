@@ -42,7 +42,6 @@
 
 #include <oslib/os.h>
 #include <oslib/osgbpb.h>
-#include <oslib/taskwindow.h>
 #include <oslib/wimp.h>
 
 /* SF-Lib header files. */
@@ -156,20 +155,6 @@ static osbool file_instance_scan_source(char *filename);
 static osbool file_instance_scan_block(FILE *fh, int level);
 static osbool file_instance_found_definition(FILE *fh);
 static osbool file_instance_found_call(FILE *fh);
-static osbool file_instance_task_window_ego(wimp_message *message);
-static osbool file_instance_task_window_morio(wimp_message *message);
-static osbool file_instance_task_window_output(wimp_message *message);
-
-/**
- * Initialise the Test File code.
- */
-
-void file_instance_initialise(void)
-{
-	event_add_message_handler(message_TASK_WINDOW_EGO, EVENT_MESSAGE_INCOMING, file_instance_task_window_ego);
-	event_add_message_handler(message_TASK_WINDOW_MORIO, EVENT_MESSAGE_INCOMING, file_instance_task_window_morio);
-	event_add_message_handler(message_TASK_WINDOW_OUTPUT, EVENT_MESSAGE_INCOMING, file_instance_task_window_output);
-}
 
 /**
  * Create a new file instance and link it to the supplied parent suite.
@@ -773,42 +758,4 @@ osbool file_instance_execute(struct file_instance_block *instance)
 //	debug_printf("Result = 0x%x, Child = 0x%x", error, child_task);
 
 //	return (error == NULL) ? TRUE : FALSE;
-}
-
-/**
- * TODO
- */
-
-static osbool file_instance_task_window_ego(wimp_message *message)
-{
-	taskwindow_full_message_ego *ego = (taskwindow_full_message_ego *) message;
-
-	debug_printf("Message_TaskWindowEgo, txt=0x%x", ego->txt);
-	return TRUE;
-}
-
-/**
- * TODO
- */
-
-static osbool file_instance_task_window_morio(wimp_message *message)
-{
-	debug_printf("Message_TaskWindowMorio");
-	return TRUE;
-}
-
-/**
- * TODO
- */
-
-static osbool file_instance_task_window_output(wimp_message *message)
-{
-	taskwindow_full_message_data *data = (taskwindow_full_message_data *) message;
-
-	char buffer[256];
-
-	string_copy(buffer, data->data, data->data_size);
-
-	debug_printf("Message_TaskWindowOutput (%d): %s", data->data_size, buffer);
-	return TRUE;
 }

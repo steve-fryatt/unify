@@ -88,12 +88,6 @@ struct file_instance_block;
 #include "window.h"
 
 /**
- * Initialise the Test File code.
- */
-
-void file_instance_initialise(void);
-
-/**
  * Create a new file instance and link it to the supplied parent suite.
  *
  * \param *parent	Pointer to the parent suite.
