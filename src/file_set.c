@@ -162,7 +162,8 @@ static unsigned file_set_find_object(struct file_set_block *instance, char *clea
  *				test suite, or NULL if this is the first.
  * \param full			TRUE if the new instance should be a full run;
  *				otherwise it will just contain incremental changes.
- * \return			Pointer to the new file set, or NULL on failure.
+ * \return			Pointer to the new file set, or the previous one
+ *				on failure.
  */
 
 struct file_set_block *file_set_create_instance(struct suite_block *parent, struct file_set_block *previous, osbool full)
@@ -171,7 +172,7 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 
 	struct file_set_block *new = heap_alloc(sizeof(struct file_set_block));
 	if (new == NULL)
-		return NULL;
+		return previous;
 
 	new->objects = NULL;
 	new->object_space = FILE_SET_ALLOCATION_UNIT;
@@ -180,7 +181,7 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 
 	if (!flexutils_allocate((void **) &(new->objects), sizeof(struct file_instance_block *), new->object_space)) {
 		heap_free(new);
-		return NULL;
+		return previous;
 	}
 
 	new->parent = parent;
@@ -193,16 +194,21 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 	file_set_find_objects(new, FILE_SET_TYPE_SOURCE, full);
 	file_set_find_objects(new, FILE_SET_TYPE_EXECUTABLE, full);
 
-	debug_printf("\\kNew file set done!");
-	char timebuf[128];
-	date_time_write_standard_string(new->timestamp, timebuf, 128);
-
-	debug_printf("File set created at %s", timebuf);
-
 	/* Do some initial validation on the files that we found. */
 
-	for (int i = 0; i < new->object_count; i++)
-		file_instance_validate_files(new->objects[i]);
+	osbool found_new_files = FALSE;
+
+	for (int i = 0; i < new->object_count; i++) {
+		if (file_instance_validate_files(new->objects[i], new))
+			found_new_files = TRUE;
+	}
+
+	/* If there were no new files, don't bother creating this instance. */
+
+	if (found_new_files == FALSE) {
+		file_set_delete_instance(new);
+		return previous;
+	}
 
 	return new;
 }

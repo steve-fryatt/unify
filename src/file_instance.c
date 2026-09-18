@@ -162,7 +162,7 @@ static osbool file_instance_found_call(FILE *fh);
  * \param *parent	Pointer to the parent suite.
  * \param *initial	Pointer to the file set which created the instance.
  * \param *name		Pointer to the name of the file.
- * \return		TRUE if successful; FALSE on error.
+ * \return		Pointer to the new file instance, or NULL on error.
  */
 
 struct file_instance_block *file_instance_create_instance(struct suite_block *parent, struct file_set_block *initial, char *name)
@@ -559,12 +559,25 @@ static void file_instance_store_file(struct suite_block *parent, struct file_ins
 
 /**
  * TODO
+ *
+ * \param *set		Pointer to the file set block requesting the validation.
+ * \return		TRUE if the file instance is new to this file set;
+ *			otherwise FALSE.
  */
 
-void file_instance_validate_files(struct file_instance_block *instance)
+osbool file_instance_validate_files(struct file_instance_block *instance, struct file_set_block *set)
 {
 	if (instance == NULL)
-		return;
+		return FALSE;
+
+	/* Check whether the instance belongs to the calling file set. If it doesn't,
+	 * then it isn't new and doesn't require validation.
+	 */
+
+	if (instance->initial != set)
+		return FALSE;
+
+	/* Validate the file instance. */
 
 	switch (instance->status) {
 	case FILE_INSTANCE_STATUS_UNKNOWN:
@@ -601,6 +614,8 @@ void file_instance_validate_files(struct file_instance_block *instance)
 			log_add_text(instance->log, sample[i], strlen(sample[i]));
 		log_finish_text(instance->log);
 	}
+
+	return TRUE;
 }
 
 

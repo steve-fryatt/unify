@@ -93,7 +93,7 @@ struct file_instance_block;
  * \param *parent	Pointer to the parent suite.
  * \param *initial	Pointer to the file set which created the instance.
  * \param *name		Pointer to the name of the file.
- * \return		TRUE if successful; FALSE on error.
+ * \return		Pointer to the new file instance, or NULL on error.
  */
 
 struct file_instance_block *file_instance_create_instance(struct suite_block *parent, struct file_set_block *initial, char *name);
@@ -214,7 +214,7 @@ struct file_instance_block *file_instance_add_executable_file(struct file_instan
  * TODO
  */
 
-void file_instance_validate_files(struct file_instance_block *instance);
+osbool file_instance_validate_files(struct file_instance_block *instance, struct file_set_block *set);
 
 /**
  * TODO
