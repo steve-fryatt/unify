@@ -220,6 +220,18 @@ osbool file_instance_validate_files(struct file_instance_block *instance, struct
  * TODO
  */
 
-osbool file_instance_execute(struct file_instance_block *instance);
+void file_instance_execute(struct file_instance_block *instance);
+
+/**
+ * TODO
+ */
+
+void file_instance_take_log_content(struct file_instance_block *instance, char *content, size_t length);
+
+/**
+ * TODO
+ */
+
+void file_instance_finish_execution(struct file_instance_block *instance);
 
 #endif

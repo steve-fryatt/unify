@@ -210,6 +210,11 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 		return previous;
 	}
 
+	/* Execute the new tests. */
+
+	for (int i = 0; i < new->object_count; i++)
+		file_instance_execute(new->objects[i]);
+
 	return new;
 }
 

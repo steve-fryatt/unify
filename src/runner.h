@@ -32,6 +32,8 @@
 
 #include <oslib/wimp.h>
 
+#include "file_instance.h"
+
 /**
  * Initialise the test runner implementation.
  *
@@ -39,5 +41,11 @@
  */
 
 void runner_initialise(wimp_t task_handle);
+
+/**
+ * TODO
+ */
+
+osbool runner_add_task(char *command, struct file_instance_block *owner);
 
 #endif

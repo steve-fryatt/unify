@@ -35,6 +35,11 @@
 #include <oslib/osgbpb.h>
 
 /**
+ * The size of buffer required for a date and time.
+ */
+#define DATE_TIME_LEN ((size_t) 64)
+
+/**
  * Return the current UTC time.
  *
  * \return		The current time, or 0 on error.

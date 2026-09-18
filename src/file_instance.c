@@ -58,7 +58,7 @@
 #include "date_time.h"
 #include "file_set.h"
 #include "log.h"
-#include "main.h"
+#include "runner.h"
 #include "suite.h"
 #include "textdump.h"
 #include "window.h"
@@ -68,6 +68,12 @@
  */
 
 #define FILE_INSTANCE_NAME_LEN 256
+
+/**
+ * The maximum length of a runner command.
+ */
+
+ #define FILE_INSTANCE_COMMAND_LEN (FILE_INSTANCE_NAME_LEN + 64)
 
 /* Structure definitions. */
 
@@ -597,29 +603,85 @@ osbool file_instance_validate_files(struct file_instance_block *instance, struct
 		break;
 	}
 
-	if (instance->status == FILE_INSTANCE_STATUS_READY_TO_RUN) { // TODO - Remove this!!!
-		char *sample[] = {
-			"This is some text\nand",
-			" this is some more.\n",
-			"We\ncan\nhave\nlots\nof\nshort\nlines\n",
-			"12345678901234567890123456789012345678901234567890123456789012345678901234567890",
-			"\n",
-			"12345678901234567890123456789012345678901234567890123456789012345678901234567890",
-			" And a very long line to end!",
-			NULL
-		};
-
-		instance->log = log_create_instance("This is a log");
-		for (int i = 0; sample[i] != NULL; i++)
-			log_add_text(instance->log, sample[i], strlen(sample[i]));
-		log_finish_text(instance->log);
-	}
-
 	return TRUE;
 }
 
+/**
+ * TODO
+ */
 
+void file_instance_execute(struct file_instance_block *instance)
+{
+	if (instance == NULL || instance->status != FILE_INSTANCE_STATUS_READY_TO_RUN)
+		return;
 
+	/* Check that we have a file to run. */
+
+	if (instance->executable.name == TEXTDUMP_NULL)
+		return;
+
+	/* Get the folder path. */
+
+	char folder[FILE_INSTANCE_NAME_LEN];
+	if (!suite_read_folder_path(instance->parent, folder, FILE_INSTANCE_NAME_LEN, SUITE_FOLDER_EXECUTABLE))
+		return;
+
+	/* Write the command. */
+
+	char *text_base = suite_get_textdump_base(instance->parent);
+	if (text_base == NULL)
+		return;
+
+	char command[FILE_INSTANCE_COMMAND_LEN];
+
+	// TODO -- The command probably should come from the suite type.
+
+	string_printf(command, FILE_INSTANCE_COMMAND_LEN, "Run %s.%s", folder, text_base + instance->executable.name);
+
+	runner_add_task(command, instance);
+}
+
+/**
+ * TODO
+ */
+
+void file_instance_take_log_content(struct file_instance_block *instance, char *content, size_t length)
+{
+	if (instance == NULL || content == NULL)
+		return;
+
+	if (instance->log == NULL) {
+		uint64_t timestamp = file_set_get_timestamp(instance->initial);
+
+		char date[DATE_TIME_LEN];
+		date_time_write_standard_string(timestamp, date, DATE_TIME_LEN);
+
+		char *textbase = suite_get_textdump_base(instance->parent);
+		if (textbase == NULL || instance->name == TEXTDUMP_NULL)
+			return;
+
+		char title[FILE_INSTANCE_NAME_LEN + DATE_TIME_LEN + 16];
+		string_printf(title, sizeof(title), "%s (at %s)", textbase + instance->name, date);
+
+		instance->log = log_create_instance(title);
+	}
+
+	if (instance->log != NULL)
+		log_add_text(instance->log, content, length);
+}
+
+/**
+ * TODO
+ */
+
+void file_instance_finish_execution(struct file_instance_block *instance)
+{
+	if (instance == NULL)
+		return;
+
+	if (instance->log != NULL)
+		log_finish_text(instance->log);
+}
 
 /**
  * TODO
@@ -747,30 +809,4 @@ static osbool file_instance_found_call(FILE *fh)
 		debug_printf("Found call '%s'", buffer);
 
 	return (c == ')') ? TRUE : FALSE;
-}
-
-/**
- * TODO
- */
-
-osbool file_instance_execute(struct file_instance_block *instance)
-{
-//	if (instance == NULL)
-		return FALSE;
-
-//	char command[1024];
-
-//	string_printf(command, 2014,
-//			"TaskWindow \"Run %s\" -wimpslot 1024K -name \"Unit Test\" -quit -task &%08x -txt &%08x",
-//			instance->absolute_file, main_task_handle, 0x1u
-//	);
-
-//	wimp_t child_task;
-
-//	os_error *error = xwimp_start_task(command, &child_task);
-
-//	debug_printf("Launched %s", command);
-//	debug_printf("Result = 0x%x, Child = 0x%x", error, child_task);
-
-//	return (error == NULL) ? TRUE : FALSE;
 }

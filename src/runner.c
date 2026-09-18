@@ -42,10 +42,13 @@
 #include <sflib/debug.h>
 #include <sflib/event.h>
 #include <sflib/heap.h>
+#include <sflib/string.h>
 
 /* Application header files */
 
 #include "runner.h"
+
+#include "file_instance.h"
 
 /**
  * The number of tasks that we will launch in parallel.
@@ -56,8 +59,10 @@
 
 struct runner_job {
 	unsigned id;
+	wimp_t child_handle;
 	wimp_t task_handle;
 	char *command;
+	struct file_instance_block *owner;
 	struct runner_job *next;
 };
 
@@ -90,6 +95,8 @@ static struct runner_job *runner_active_jobs[RUNNER_TASKS] = { NULL };
 
 /* Static function prototypes. */
 
+static void runner_delete_task(struct runner_job *job);
+static osbool runner_start_task(struct runner_job *job, int slot);
 static osbool runner_task_window_ego(wimp_message *message);
 static osbool runner_task_window_morio(wimp_message *message);
 static osbool runner_task_window_output(wimp_message *message);
@@ -109,8 +116,14 @@ void runner_initialise(wimp_t task_handle)
 	event_add_message_handler(message_TASK_WINDOW_OUTPUT, EVENT_MESSAGE_INCOMING, runner_task_window_output);
 }
 
-osbool runner_add_task(char *command)
+/**
+ * TODO
+ */
+
+osbool runner_add_task(char *command, struct file_instance_block *owner)
 {
+	debug_printf("\\RExecuting %s", command);
+
 	struct runner_job *new = heap_alloc(sizeof(struct runner_job));
 	if (new == NULL)
 		return FALSE;
@@ -118,7 +131,27 @@ osbool runner_add_task(char *command)
 	new->id = next_id++;
 	new->task_handle = NULL;
 	new->command = heap_strdup(command);
+	new->owner = owner;
 	new->next = NULL;
+
+	if (new->command == NULL) {
+		runner_delete_task(new);
+		return FALSE;
+	}
+
+	/* See if we have a free slot to run the task now. */
+
+	int slot = -1;
+
+	for (int i = 0; i < RUNNER_TASKS; i++) {
+		if (runner_active_jobs[i] == NULL) {
+			slot = i;
+			break;
+		}
+	}
+
+	if (slot >= 0)
+		return runner_start_task(new, slot);
 
 	/* Link the task into the queue tail. */
 
@@ -132,7 +165,50 @@ osbool runner_add_task(char *command)
 	if (runner_queue_head == NULL)
 		runner_queue_head = new;
 
-	// TODO - Try to add the task into the active tasks. */
+	return TRUE;
+}
+
+/**
+ * TODO
+ */
+
+static void runner_delete_task(struct runner_job *job)
+{
+	if (job == NULL)
+		return;
+
+	if (job->command != NULL)
+		heap_free(job->command);
+
+	heap_free(job);
+}
+
+/**
+ * TODO
+ */
+
+static osbool runner_start_task(struct runner_job *job, int slot)
+{
+	char command[1024];
+
+	string_printf(command, 2014,
+			"TaskWindow \"%s\" -wimpslot 1024K -name \"Unit Test\" -quit -task &%08x -txt &%08x",
+			job->command,
+			runner_task_handle,
+			job->id
+	);
+
+	os_error *error = xwimp_start_task(command, &(job->child_handle));
+
+	debug_printf("Launched %s", command);
+	debug_printf("Result = 0x%x, Child = 0x%x", error, job->child_handle);
+
+	if (error != NULL)
+		return FALSE;
+
+	runner_active_jobs[slot] = job;
+
+	return TRUE;
 }
 
 /**
@@ -144,6 +220,18 @@ static osbool runner_task_window_ego(wimp_message *message)
 	taskwindow_full_message_ego *ego = (taskwindow_full_message_ego *) message;
 
 	debug_printf("Message_TaskWindowEgo, txt=0x%x", ego->txt);
+
+	for (int slot = 0; slot < RUNNER_TASKS; slot++) {
+		struct runner_job *job = runner_active_jobs[slot];
+		if (job == NULL || job->id != ego->txt)
+			continue;
+
+		job->task_handle = ego->sender;
+		debug_printf("Found id %d, matched child handle 0x%x and task handle 0x%x",
+				job->id, job->child_handle, job->task_handle);
+		break;
+	}
+
 	return TRUE;
 }
 
@@ -154,6 +242,36 @@ static osbool runner_task_window_ego(wimp_message *message)
 static osbool runner_task_window_morio(wimp_message *message)
 {
 	debug_printf("Message_TaskWindowMorio");
+
+	for (int slot = 0; slot < RUNNER_TASKS; slot++) {
+		struct runner_job *job = runner_active_jobs[slot];
+		if (job == NULL || job->task_handle != message->sender)
+			continue;
+
+		debug_printf("Id %d completed", job->id);
+
+		/* End the current task. */
+
+		file_instance_finish_execution(job->owner);
+
+		runner_active_jobs[slot] = NULL;
+		runner_delete_task(job);
+
+		/* See if there's a task to launch in its place. */
+
+		if (runner_queue_head != NULL) {
+			struct runner_job *new = runner_queue_head;
+			runner_queue_head = new->next;
+
+			if (runner_queue_tail == new)
+				runner_queue_tail = NULL;
+
+			runner_start_task(new, slot);
+		}
+
+		break;
+	}
+
 	return TRUE;
 }
 
@@ -165,10 +283,16 @@ static osbool runner_task_window_output(wimp_message *message)
 {
 	taskwindow_full_message_data *data = (taskwindow_full_message_data *) message;
 
-	char buffer[256];
+	for (int slot = 0; slot < RUNNER_TASKS; slot++) {
+		struct runner_job *job = runner_active_jobs[slot];
+		if (job == NULL || job->task_handle != message->sender)
+			continue;
 
-	string_copy(buffer, data->data, data->data_size);
+		debug_printf("Id %d has data", job->id);
 
-	debug_printf("Message_TaskWindowOutput (%d): %s", data->data_size, buffer);
+		file_instance_take_log_content(job->owner, data->data, data->data_size);
+		break;
+	}
+
 	return TRUE;
 }
