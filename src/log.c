@@ -531,18 +531,15 @@ void log_finish_text(struct log_instance *instance)
 
 	for (unsigned i = 0; i < (instance->length - 1); i++) {
 		if (instance->text[i] == '\r' && instance->text[i+1] == '\n') {
-			instance->text[i++] = '\0';
-			instance->text[i] = '\0';
-			lines++;
+			i++, lines++;
 		} else if (instance->text[i] == '\n' && instance->text[i+1] == '\r') {
-			instance->text[i++] = '\0';
-			instance->text[i] = '\0';
-			lines++;
+			i++, lines++;
 		} else if (instance->text[i] == '\r' || instance->text[i] == '\n') {
-			instance->text[i] = '\0';
 			lines++;
 		}
 	}
+
+	debug_printf("Found %d lines", lines);
 
 	/* Allocate space for the redraw data and populate it. */
 
@@ -562,12 +559,21 @@ void log_finish_text(struct log_instance *instance)
 		instance->lines[line].colour = os_COLOUR_BLACK;
 		line++;
 
-		while (i < instance->length && instance->text[i] != '\0')
+		while (i < instance->length && instance->text[i] != '\r' && instance->text[i] != '\n')
 			i++;
 
-		while (i < instance->length && instance->text[i] == '\0')
-			i++;
+		if (instance->text[i] == '\r' && instance->text[i+1] == '\n') {
+			instance->text[i++] = '\0';
+			instance->text[i++] = '\0';
+		} else if (instance->text[i] == '\n' && instance->text[i+1] == '\r') {
+			instance->text[i++] = '\0';
+			instance->text[i++] = '\0';
+		} else if (instance->text[i] == '\r' || instance->text[i] == '\n') {
+			instance->text[i++] = '\0';
+		}
 	}
+
+	debug_printf("Ended with %d lines", line);
 
 	/* Close the log off to future updates. */
 

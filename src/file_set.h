@@ -55,7 +55,8 @@ struct file_set_block;
  *				test suite, or NULL if this is the first.
  * \param full			TRUE if the new instance should be a full run;
  *				otherwise it will just contain incremental changes.
- * \return			Pointer to the new file set, or NULL on failure.
+ * \return			Pointer to the new file set, or the previous one
+ *				on failure.
  */
 
 struct file_set_block *file_set_create_instance(struct suite_block *parent, struct file_set_block *previous, osbool full);

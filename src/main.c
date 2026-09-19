@@ -62,8 +62,8 @@
 #include "file_dialogue.h"
 #include "iconbar.h"
 #include "log.h"
+#include "runner.h"
 #include "suite.h"
-#include "file_instance.h"
 #include "window.h"
 
 /**
@@ -237,12 +237,11 @@ static void main_initialise(void)
 	dataxfer_initialise(main_task_handle, &main_memory_handlers);
 	ihelp_initialise();
 	url_initialise();
-
+	runner_initialise(main_task_handle);
 	window_initialise(sprites);
 	log_initialise();
 	file_dialogue_initialise();
 	iconbar_initialise();
-	file_instance_initialise();
 
 	templates_close();
 

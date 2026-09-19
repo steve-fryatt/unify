@@ -42,7 +42,6 @@
 
 #include <oslib/os.h>
 #include <oslib/osgbpb.h>
-#include <oslib/taskwindow.h>
 #include <oslib/wimp.h>
 
 /* SF-Lib header files. */
@@ -59,7 +58,7 @@
 #include "date_time.h"
 #include "file_set.h"
 #include "log.h"
-#include "main.h"
+#include "runner.h"
 #include "suite.h"
 #include "textdump.h"
 #include "window.h"
@@ -69,6 +68,12 @@
  */
 
 #define FILE_INSTANCE_NAME_LEN 256
+
+/**
+ * The maximum length of a runner command.
+ */
+
+ #define FILE_INSTANCE_COMMAND_LEN (FILE_INSTANCE_NAME_LEN + 64)
 
 /* Structure definitions. */
 
@@ -156,20 +161,6 @@ static osbool file_instance_scan_source(char *filename);
 static osbool file_instance_scan_block(FILE *fh, int level);
 static osbool file_instance_found_definition(FILE *fh);
 static osbool file_instance_found_call(FILE *fh);
-static osbool file_instance_task_window_ego(wimp_message *message);
-static osbool file_instance_task_window_morio(wimp_message *message);
-static osbool file_instance_task_window_output(wimp_message *message);
-
-/**
- * Initialise the Test File code.
- */
-
-void file_instance_initialise(void)
-{
-	event_add_message_handler(message_TASK_WINDOW_EGO, EVENT_MESSAGE_INCOMING, file_instance_task_window_ego);
-	event_add_message_handler(message_TASK_WINDOW_MORIO, EVENT_MESSAGE_INCOMING, file_instance_task_window_morio);
-	event_add_message_handler(message_TASK_WINDOW_OUTPUT, EVENT_MESSAGE_INCOMING, file_instance_task_window_output);
-}
 
 /**
  * Create a new file instance and link it to the supplied parent suite.
@@ -177,7 +168,7 @@ void file_instance_initialise(void)
  * \param *parent	Pointer to the parent suite.
  * \param *initial	Pointer to the file set which created the instance.
  * \param *name		Pointer to the name of the file.
- * \return		TRUE if successful; FALSE on error.
+ * \return		Pointer to the new file instance, or NULL on error.
  */
 
 struct file_instance_block *file_instance_create_instance(struct suite_block *parent, struct file_set_block *initial, char *name)
@@ -211,7 +202,14 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
 }
 
 /**
- * TODO
+ * Clone an existing file instance and link it to the same parent suite.
+ *
+ * \param *initial	Pointer to the file set which created the instance.
+ * \param *template	Pointer to the file instance which is to be used as a
+ *			template for the clone.
+ * \param use_source	TRUE if the details of the source file should be
+ *			cloned as part of the operation; otherwise FALSE.
+ * \return		Pointer to the new file instance, or NULL on error.
  */
 
 static struct file_instance_block *file_instance_clone_instance(struct file_set_block *initial, struct file_instance_block *template, osbool use_source)
@@ -465,7 +463,19 @@ osbool file_instance_compare_object(struct file_instance_block *instance, char *
 }
 
 /**
- * TODO
+ * Add the details of a source file to a file instance, returning a pointer to
+ * the (possibly new) instance.
+ *
+ * For a new instance, the file will be added with only some basic sanity
+ * checks. If this is an updated instance, then if the file details appear to
+ * have changed, the instance will be cloned and a pointer to the clone
+ * returned.
+ *
+ * \param *instance	Pointer to the file instance in question.
+ * \param *set		Pointer to the file set which is being constructed.
+ * \param *entry	Pointer to the OS_GBPB data for the file to be added.
+ * \return		A pointer to the instance, which will either be the same
+ *			one originally supplied or a new clone.
  */
 
 struct file_instance_block *file_instance_add_source_file(struct file_instance_block *instance, struct file_set_block *set, osgbpb_info *entry)
@@ -510,7 +520,19 @@ struct file_instance_block *file_instance_add_source_file(struct file_instance_b
 }
 
 /**
- * TODO
+ * Add the details of an executable file to a file instance, returning a pointer
+ * to the (possibly new) instance.
+ *
+ * For a new instance, the file will be added with only some basic sanity
+ * checks. If this is an updated instance, then if the file details appear to
+ * have changed, the instance will be cloned and a pointer to the clone
+ * returned.
+ *
+ * \param *instance	Pointer to the file instance in question.
+ * \param *set		Pointer to the file set which is being constructed.
+ * \param *entry	Pointer to the OS_GBPB data for the file to be added.
+ * \return		A pointer to the instance, which will either be the same
+ *			one originally supplied or a new clone.
  */
 
 struct file_instance_block *file_instance_add_executable_file(struct file_instance_block *instance, struct file_set_block *set, osgbpb_info *entry)
@@ -554,7 +576,12 @@ struct file_instance_block *file_instance_add_executable_file(struct file_instan
 }
 
 /**
- * TODO
+ * Store a file's details within a file instance.
+ *
+ * \param *parent	Pointer to the parent suite.
+ * \param *details	Pointer to the file details within the file instance
+ *			which are to be updated.
+ * \param *entry	Pointer to the OS_GBPB data for the file to be added.
  */
 
 static void file_instance_store_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry)
@@ -573,13 +600,27 @@ static void file_instance_store_file(struct suite_block *parent, struct file_ins
 }
 
 /**
- * TODO
+ * Perform some pre-flight validation on a new file instance.
+ *
+ * \param *instance	Pointer to the file instance to be validated.
+ * \param *set		Pointer to the file set block requesting the validation.
+ * \return		TRUE if the file instance is new to this file set;
+ *			otherwise FALSE.
  */
 
-void file_instance_validate_files(struct file_instance_block *instance)
+osbool file_instance_validate_files(struct file_instance_block *instance, struct file_set_block *set)
 {
 	if (instance == NULL)
-		return;
+		return FALSE;
+
+	/* Check whether the instance belongs to the calling file set. If it doesn't,
+	 * then it isn't new and doesn't require validation.
+	 */
+
+	if (instance->initial != set)
+		return FALSE;
+
+	/* Validate the file instance. */
 
 	switch (instance->status) {
 	case FILE_INSTANCE_STATUS_UNKNOWN:
@@ -599,27 +640,113 @@ void file_instance_validate_files(struct file_instance_block *instance)
 		break;
 	}
 
-	if (instance->status == FILE_INSTANCE_STATUS_READY_TO_RUN) { // TODO - Remove this!!!
-		char *sample[] = {
-			"This is some text\nand",
-			" this is some more.\n",
-			"We\ncan\nhave\nlots\nof\nshort\nlines\n",
-			"12345678901234567890123456789012345678901234567890123456789012345678901234567890",
-			"\n",
-			"12345678901234567890123456789012345678901234567890123456789012345678901234567890",
-			" And a very long line to end!",
-			NULL
-		};
-
-		instance->log = log_create_instance("This is a log");
-		for (int i = 0; sample[i] != NULL; i++)
-			log_add_text(instance->log, sample[i], strlen(sample[i]));
-		log_finish_text(instance->log);
-	}
+	return TRUE;
 }
 
+/**
+ * Attempt to queue a file instance for execution.
+ *
+ * \param *instance	Pointer to the file instance to be executed.
+ */
 
+void file_instance_execute(struct file_instance_block *instance)
+{
+	if (instance == NULL || instance->status != FILE_INSTANCE_STATUS_READY_TO_RUN)
+		return;
 
+	/* Check that we have a file to run. */
+
+	if (instance->executable.name == TEXTDUMP_NULL)
+		return;
+
+	/* Get the folder path. */
+
+	char folder[FILE_INSTANCE_NAME_LEN];
+	if (!suite_read_folder_path(instance->parent, folder, FILE_INSTANCE_NAME_LEN, SUITE_FOLDER_EXECUTABLE))
+		return;
+
+	/* Write the command. */
+
+	char *text_base = suite_get_textdump_base(instance->parent);
+	if (text_base == NULL)
+		return;
+
+	char command[FILE_INSTANCE_COMMAND_LEN];
+
+	// TODO -- The command probably should come from the suite type.
+
+	string_printf(command, FILE_INSTANCE_COMMAND_LEN, "Run %s.%s", folder, text_base + instance->executable.name);
+
+	if (runner_add_task(command, instance))
+		instance->status = FILE_INSTANCE_STATUS_IN_QUEUE;
+	else
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_QUEUE;
+}
+
+/**
+ * Accept TaskWindow output from the runner and add it to the log for a
+ * file instance. If a log doesn't exist, it will be created.
+ *
+ * \param *instance	Pointer to the file instance to be updated.
+ * \param *content	Pointer to the new log content. This does not need
+ *			to be zero-terminated.
+ * \param length	The length of the content, in bytes.
+ */
+
+void file_instance_take_log_content(struct file_instance_block *instance, char *content, size_t length)
+{
+	if (instance == NULL || content == NULL)
+		return;
+
+	if (instance->log == NULL) {
+		uint64_t timestamp = file_set_get_timestamp(instance->initial);
+
+		char date[DATE_TIME_LEN];
+		date_time_write_standard_string(timestamp, date, DATE_TIME_LEN);
+
+		char *textbase = suite_get_textdump_base(instance->parent);
+		if (textbase == NULL || instance->name == TEXTDUMP_NULL)
+			return;
+
+		char title[FILE_INSTANCE_NAME_LEN + DATE_TIME_LEN + 16];
+		string_printf(title, sizeof(title), "%s (at %s)", textbase + instance->name, date);
+
+		instance->log = log_create_instance(title);
+	}
+
+	if (instance->log != NULL)
+		log_add_text(instance->log, content, length);
+}
+
+/**
+ * Called by the runner if the attempt to launch the executable in TaskWindow
+ * failed.
+ *
+ * \param *instance		Pointer to the instance affected.
+ */
+
+void file_instance_execution_falied(struct file_instance_block *instance)
+{
+	if (instance == NULL)
+		return;
+
+	instance->status = FILE_INSTANCE_STATUS_ERROR_FALIED_TO_EXECUTE;
+}
+
+/**
+ * Called by the runner when the task has completed execution.
+ *
+ * \param *instance		Pointer to the instance affected.
+ */
+
+void file_instance_execution_finished(struct file_instance_block *instance)
+{
+	if (instance == NULL)
+		return;
+
+	if (instance->log != NULL)
+		log_finish_text(instance->log);
+}
 
 /**
  * TODO
@@ -747,68 +874,4 @@ static osbool file_instance_found_call(FILE *fh)
 		debug_printf("Found call '%s'", buffer);
 
 	return (c == ')') ? TRUE : FALSE;
-}
-
-/**
- * TODO
- */
-
-osbool file_instance_execute(struct file_instance_block *instance)
-{
-//	if (instance == NULL)
-		return FALSE;
-
-//	char command[1024];
-
-//	string_printf(command, 2014,
-//			"TaskWindow \"Run %s\" -wimpslot 1024K -name \"Unit Test\" -quit -task &%08x -txt &%08x",
-//			instance->absolute_file, main_task_handle, 0x1u
-//	);
-
-//	wimp_t child_task;
-
-//	os_error *error = xwimp_start_task(command, &child_task);
-
-//	debug_printf("Launched %s", command);
-//	debug_printf("Result = 0x%x, Child = 0x%x", error, child_task);
-
-//	return (error == NULL) ? TRUE : FALSE;
-}
-
-/**
- * TODO
- */
-
-static osbool file_instance_task_window_ego(wimp_message *message)
-{
-	taskwindow_full_message_ego *ego = (taskwindow_full_message_ego *) message;
-
-	debug_printf("Message_TaskWindowEgo, txt=0x%x", ego->txt);
-	return TRUE;
-}
-
-/**
- * TODO
- */
-
-static osbool file_instance_task_window_morio(wimp_message *message)
-{
-	debug_printf("Message_TaskWindowMorio");
-	return TRUE;
-}
-
-/**
- * TODO
- */
-
-static osbool file_instance_task_window_output(wimp_message *message)
-{
-	taskwindow_full_message_data *data = (taskwindow_full_message_data *) message;
-
-	char buffer[256];
-
-	string_copy(buffer, data->data, data->data_size);
-
-	debug_printf("Message_TaskWindowOutput (%d): %s", data->data_size, buffer);
-	return TRUE;
 }
