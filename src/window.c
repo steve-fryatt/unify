@@ -1380,7 +1380,11 @@ static void window_force_redraw_lines(struct window_instance *instance, int firs
 }
 
 /**
- * TODO
+ * Populate the file information dialogue, ready for it to be displayed.
+ *
+ * \param *instance		Pointer to the window instance in which the
+ *				dialogue is being displayed.
+ * \param fold			The fold number of the file to be displayed.
  */
 
 static void window_populate_file_info_dialogue(struct window_instance *instance, int fold)
