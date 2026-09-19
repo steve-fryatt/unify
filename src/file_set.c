@@ -210,10 +210,12 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 		return previous;
 	}
 
-	/* Execute the new tests. */
+	/* Parse and execute the new tests. */
 
-	for (int i = 0; i < new->object_count; i++)
+	for (int i = 0; i < new->object_count; i++) {
+		file_instance_scan_source(new->objects[i]);
 		file_instance_execute(new->objects[i]);
+	}
 
 	return new;
 }
@@ -552,14 +554,16 @@ static void file_set_find_objects(struct file_set_block *instance, enum file_set
 
 	switch (type) {
 	case FILE_SET_TYPE_SOURCE:
-		suite_read_folder_path(instance->parent, folder, FILE_SET_MAX_PATH_LEN, SUITE_FOLDER_SOURCE);
+		suite_read_folder_path(instance->parent, folder, FILE_SET_MAX_PATH_LEN,
+				SUITE_FOLDER_SOURCE, TEXTDUMP_NULL);
 		pattern = "*/c";
 		suffix = "/c";
 		filetype = osfile_TYPE_TEXT;
 		break;
 
 	case FILE_SET_TYPE_EXECUTABLE:
-		suite_read_folder_path(instance->parent, folder, FILE_SET_MAX_PATH_LEN, SUITE_FOLDER_EXECUTABLE);
+		suite_read_folder_path(instance->parent, folder, FILE_SET_MAX_PATH_LEN,
+				SUITE_FOLDER_EXECUTABLE, TEXTDUMP_NULL);
 		filetype = osfile_TYPE_ABSOLUTE;
 		break;
 

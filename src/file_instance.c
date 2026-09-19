@@ -32,7 +32,6 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <stddef.h>
-#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -58,6 +57,7 @@
 #include "date_time.h"
 #include "file_set.h"
 #include "log.h"
+#include "project.h"
 #include "runner.h"
 #include "suite.h"
 #include "textdump.h"
@@ -157,10 +157,8 @@ struct file_instance_block {
 
 static struct file_instance_block *file_instance_clone_instance(struct file_set_block *initial, struct file_instance_block *template, osbool use_source);
 static void file_instance_store_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry);
-static osbool file_instance_scan_source(char *filename);
-static osbool file_instance_scan_block(FILE *fh, int level);
-static osbool file_instance_found_definition(FILE *fh);
-static osbool file_instance_found_call(FILE *fh);
+static void file_instance_found_definition(struct file_instance_block *instance, char *name, int line);
+static void file_instance_found_call(struct file_instance_block *instance, char *name, int line);
 
 /**
  * Create a new file instance and link it to the supplied parent suite.
@@ -625,7 +623,7 @@ osbool file_instance_validate_files(struct file_instance_block *instance, struct
 	switch (instance->status) {
 	case FILE_INSTANCE_STATUS_UNKNOWN:
 		if (instance->source.name != TEXTDUMP_NULL && instance->executable.name != TEXTDUMP_NULL)
-			instance->status = FILE_INSTANCE_STATUS_READY_TO_RUN;
+			instance->status = FILE_INSTANCE_STATUS_READY_TO_SCAN;
 		else if (instance->source.name == TEXTDUMP_NULL && instance->executable.name == TEXTDUMP_NULL)
 			instance->status = FILE_INSTANCE_STATUS_ERROR_NO_FILES;
 		else if (instance->source.name == TEXTDUMP_NULL)
@@ -644,6 +642,70 @@ osbool file_instance_validate_files(struct file_instance_block *instance, struct
 }
 
 /**
+ * TODO
+ */
+
+void file_instance_scan_source(struct file_instance_block *instance)
+{
+	if (instance == NULL || instance->status != FILE_INSTANCE_STATUS_READY_TO_SCAN)
+		return;
+
+	struct project_source_callbacks callbacks = {
+		.owner = instance,
+		.found_definition = file_instance_found_definition,
+		.found_call = file_instance_found_call
+	};
+
+	struct project_details *project = suite_get_project_details(instance->parent);
+	if (project == NULL) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_SOURCE;
+		return;
+	}
+
+	/* Get the filename of the source. */
+
+	char filename[FILE_INSTANCE_NAME_LEN];
+	if (!suite_read_folder_path(instance->parent, filename, FILE_INSTANCE_NAME_LEN,
+			SUITE_FOLDER_SOURCE, instance->source.name)) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_SOURCE;
+		return;
+	}
+
+	/* Scan the file. */
+
+	FILE *fh = fopen(filename, "r");
+	if (fh == NULL) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_SOURCE;
+		return;
+	}
+
+	if (project->source_decoder(fh, &callbacks) == TRUE)
+		instance->status = FILE_INSTANCE_STATUS_READY_TO_RUN;
+	else
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_SOURCE;
+
+	fclose(fh);
+}
+
+/**
+ * TODO
+ */
+
+static void file_instance_found_definition(struct file_instance_block *instance, char *name, int line)
+{
+	debug_printf("We've found a definition of %s at line %d", name, line);
+}
+
+/**
+ * TODO
+ */
+
+static void file_instance_found_call(struct file_instance_block *instance, char *name, int line)
+{
+	debug_printf("We've found a call to %s at line %d", name, line);
+}
+
+/**
  * Attempt to queue a file instance for execution.
  *
  * \param *instance	Pointer to the file instance to be executed.
@@ -656,26 +718,27 @@ void file_instance_execute(struct file_instance_block *instance)
 
 	/* Check that we have a file to run. */
 
-	if (instance->executable.name == TEXTDUMP_NULL)
+	if (instance->executable.name == TEXTDUMP_NULL) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_QUEUE;
 		return;
+	}
 
-	/* Get the folder path. */
+	/* Get the filename of the executable. */
 
-	char folder[FILE_INSTANCE_NAME_LEN];
-	if (!suite_read_folder_path(instance->parent, folder, FILE_INSTANCE_NAME_LEN, SUITE_FOLDER_EXECUTABLE))
+	char filename[FILE_INSTANCE_NAME_LEN];
+	if (!suite_read_folder_path(instance->parent, filename, FILE_INSTANCE_NAME_LEN,
+			SUITE_FOLDER_EXECUTABLE, instance->executable.name)) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_QUEUE;
 		return;
+	}
 
 	/* Write the command. */
-
-	char *text_base = suite_get_textdump_base(instance->parent);
-	if (text_base == NULL)
-		return;
 
 	char command[FILE_INSTANCE_COMMAND_LEN];
 
 	// TODO -- The command probably should come from the suite type.
 
-	string_printf(command, FILE_INSTANCE_COMMAND_LEN, "Run %s.%s", folder, text_base + instance->executable.name);
+	string_printf(command, FILE_INSTANCE_COMMAND_LEN, "Run %s", filename);
 
 	if (runner_add_task(command, instance))
 		instance->status = FILE_INSTANCE_STATUS_IN_QUEUE;
@@ -746,132 +809,4 @@ void file_instance_execution_finished(struct file_instance_block *instance)
 
 	if (instance->log != NULL)
 		log_finish_text(instance->log);
-}
-
-/**
- * TODO
- */
-
-static osbool file_instance_scan_source(char *filename)
-{
-	FILE *fh = fopen(filename, "r");
-	if (fh == NULL)
-		return FALSE;
-
-	osbool result = file_instance_scan_block(fh, 0);
-
-	fclose(fh);
-
-	return result;
-}
-
-/**
- * TODO
- */
-
-static osbool file_instance_scan_block(FILE *fh, int level)
-{
-	if (fh == NULL)
-		return FALSE;
-
-	int c;
-
-	/* Step past any leading white space. */
-
-	while ((c = fgetc(fh)) != EOF && isspace(c));
-	if (c == EOF)
-		return TRUE;
-
-	fseek(fh, -1, SEEK_CUR);
-
-	/* Scan for text that we're interested in. */
-
-	char *definition = "void ";
-	char *call = "RUN_TEST(";
-
-	char *test_definition = definition, *test_call = call;
-
-	while ((c = fgetc(fh)) != EOF && c != '}') {
-		if (level == 1 && test_definition == definition && *test_call == c) {
-			/* We're matching a call line. */
-			test_call++;
-			if (*test_call == '\0')
-				file_instance_found_call(fh);
-		} else if (level == 0 && test_call == call && *test_definition == c) {
-			/* We're matching a function definition line. */
-			test_definition++;
-			if (*test_definition == '\0')
-				file_instance_found_definition(fh);
-		} else if (c == '{') {
-			/* We've moved into a new block. */
-			file_instance_scan_block(fh, level + 1);
-			test_definition = definition;
-			test_call = call;
-		} else if (c == ';') {
-			/* The end of the current statement. */
-			test_definition = definition;
-			test_call = call;
-
-			/* Skip past leading whitespace. */
-			while ((c = fgetc(fh)) != EOF && isspace(c));
-			if (c == EOF)
-				break;
-
-			fseek(fh, -1, SEEK_CUR);
-		} else {
-			/* All matches failed, so reset the searches. */
-			test_definition = definition;
-			test_call = call;
-		}
-	}
-
-	return TRUE;
-}
-
-/**
- * TODO
- */
-
-static osbool file_instance_found_definition(FILE *fh)
-{
-	char buffer[256], *b = buffer;
-
-	int c = '\0';
-
-	while ((c = fgetc(fh)) && c != '(' && c != ';')
-		if (b < buffer + 255)
-			*b++ = c;
-
-	*b = '\0';
-
-	if (c == ';')
-		fseek(fh, -1, SEEK_CUR);
-	else if (c == '(' && strcmp(buffer, "main") && strcmp(buffer, "setUp") && strcmp(buffer, "tearDown"))
-		debug_printf("Found definition '%s'", buffer);
-
-	return (c == '(') ? TRUE : FALSE;
-}
-
-/**
- * TODO
- */
-
-static osbool file_instance_found_call(FILE *fh)
-{
-	char buffer[256], *b = buffer;
-
-	int c = '\0';
-
-	while ((c = fgetc(fh)) && c != ')' && c != ';')
-		if (b < buffer + 255)
-			*b++ = c;
-
-	*b = '\0';
-
-	if (c == ';')
-		fseek(fh, -1, SEEK_CUR);
-	else if (c == ')')
-		debug_printf("Found call '%s'", buffer);
-
-	return (c == ')') ? TRUE : FALSE;
 }
