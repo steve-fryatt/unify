@@ -43,7 +43,13 @@
 void runner_initialise(wimp_t task_handle);
 
 /**
- * TODO
+ * Add a task to the runner queue, to be executed when a slot becomes available.
+ *
+ * \param *command	Pointer to the command string which will launch the
+ *			task.
+ * \param *owner	Pointer to the file instance which will own the task.
+ * \return		TRUE if the task was added to the queue; otherwise
+ *			FALSE.
  */
 
 osbool runner_add_task(char *command, struct file_instance_block *owner);

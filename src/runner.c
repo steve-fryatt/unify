@@ -93,6 +93,12 @@ static struct runner_job *runner_queue_tail = NULL;
  */
 static struct runner_job *runner_active_jobs[RUNNER_TASKS] = { NULL };
 
+/**
+ * The amount of memory, in kilobytes, that TaskWindow will be asked to
+ * allocate.
+ */
+static unsigned runner_slot_size = 1024;
+
 /* Static function prototypes. */
 
 static void runner_delete_task(struct runner_job *job);
@@ -104,7 +110,7 @@ static osbool runner_task_window_output(wimp_message *message);
 /**
  * Initialise the test runner implementation.
  *
- * \param task_handle		The handle of the task.
+ * \param task_handle	The handle of the task.
  */
 
 void runner_initialise(wimp_t task_handle)
@@ -117,7 +123,13 @@ void runner_initialise(wimp_t task_handle)
 }
 
 /**
- * TODO
+ * Add a task to the runner queue, to be executed when a slot becomes available.
+ *
+ * \param *command	Pointer to the command string which will launch the
+ *			task.
+ * \param *owner	Pointer to the file instance which will own the task.
+ * \return		TRUE if the task was added to the queue; otherwise
+ *			FALSE.
  */
 
 osbool runner_add_task(char *command, struct file_instance_block *owner)
@@ -150,6 +162,10 @@ osbool runner_add_task(char *command, struct file_instance_block *owner)
 		}
 	}
 
+	/* There's no need to do anything if the task fails, because if there's
+	 * a free slot then presumably there isn't a queue of jobs to be run.
+	 */
+
 	if (slot >= 0)
 		return runner_start_task(new, slot);
 
@@ -169,7 +185,11 @@ osbool runner_add_task(char *command, struct file_instance_block *owner)
 }
 
 /**
- * TODO
+ * Delete a task from the runner, freeing up all of the associated memory.
+ * It is up to the called to ensure that references have been removed from any
+ * lists that they appear in.
+ *
+ * \param *job		Pointer to the runner task to be deleted.
  */
 
 static void runner_delete_task(struct runner_job *job)
@@ -184,16 +204,38 @@ static void runner_delete_task(struct runner_job *job)
 }
 
 /**
- * TODO
+ * Attempt to start a runner task with TaskWindow, adding the task into the
+ * given run slot if successful.
+ *
+ * NB. If the task fails to run, the job will be deleted. A job will fail
+ * to run if the supplied slot isn't free.
+ *
+ * \param *job		Pointer to the task to be run.
+ * \param slot		The slot in which to store the running task.
+ *
  */
 
 static osbool runner_start_task(struct runner_job *job, int slot)
 {
+	if (job == NULL || slot < 0 || slot >= RUNNER_TASKS)
+		return FALSE;
+
+	/* If the supplied slot isn't free, fail to run. */
+
+	if (runner_active_jobs[slot] != NULL) {
+		file_instance_execution_falied(job->owner);
+		runner_delete_task(job);
+		return FALSE;
+	}
+
+	/* Build the command line for the task. */
+
 	char command[1024];
 
-	string_printf(command, 2014,
-			"TaskWindow \"%s\" -wimpslot 1024K -name \"Unit Test\" -quit -task &%08x -txt &%08x",
+	string_printf(command, sizeof(command),
+			"TaskWindow \"%s\" -wimpslot %dK -name \"Unit Test\" -quit -task &%08x -txt &%08x",
 			job->command,
+			runner_slot_size,
 			runner_task_handle,
 			job->id
 	);
@@ -203,8 +245,13 @@ static osbool runner_start_task(struct runner_job *job, int slot)
 	debug_printf("Launched %s", command);
 	debug_printf("Result = 0x%x, Child = 0x%x", error, job->child_handle);
 
-	if (error != NULL)
+	/* If the task failed to launch, tell the owner, delete it, and move on. */
+
+	if (error != NULL) {
+		file_instance_execution_falied(job->owner);
+		runner_delete_task(job);
 		return FALSE;
+	}
 
 	runner_active_jobs[slot] = job;
 
@@ -212,7 +259,14 @@ static osbool runner_start_task(struct runner_job *job, int slot)
 }
 
 /**
- * TODO
+ * Handle Message_TaskWindowEgo messages, indicating that a new task has
+ * been started by TaskWindow.
+ *
+ * On receipt, the ID will be matched in the list of running tasks and the
+ * task handle will be recorded.
+ *
+ * \param *message	Pointer to the message block.
+ * \return		TRUE to report that the message was handled.
  */
 
 static osbool runner_task_window_ego(wimp_message *message)
@@ -236,7 +290,16 @@ static osbool runner_task_window_ego(wimp_message *message)
 }
 
 /**
- * TODO
+ * Handle Message_TaskWindowEgo messages, indicating that a task has come to
+ * an end.
+ *
+ * On receipt, the task handle will be matched in the list of running tasks, the
+ * owning file instance will be notified, and the job will be deleted. If there
+ * are any more jobs pending, the next one will be started in the now vacant
+ * slot.
+ *
+ * \param *message	Pointer to the message block.
+ * \return		TRUE to report that the message was handled.
  */
 
 static osbool runner_task_window_morio(wimp_message *message)
@@ -252,21 +315,23 @@ static osbool runner_task_window_morio(wimp_message *message)
 
 		/* End the current task. */
 
-		file_instance_finish_execution(job->owner);
+		file_instance_execution_finished(job->owner);
 
 		runner_active_jobs[slot] = NULL;
 		runner_delete_task(job);
 
 		/* See if there's a task to launch in its place. */
 
-		if (runner_queue_head != NULL) {
+		osbool outcome = FALSE;
+
+		while (runner_queue_head != NULL && outcome == FALSE) {
 			struct runner_job *new = runner_queue_head;
 			runner_queue_head = new->next;
 
 			if (runner_queue_tail == new)
 				runner_queue_tail = NULL;
 
-			runner_start_task(new, slot);
+			outcome = runner_start_task(new, slot);
 		}
 
 		break;
@@ -276,7 +341,14 @@ static osbool runner_task_window_morio(wimp_message *message)
 }
 
 /**
- * TODO
+ * Handle Message_TaskWindowOutput messages, returning data output by a running
+ * task.
+ *
+ * On receipt, the task handle will be matched in the list of running tasks, and
+ * the data will be passed on to the owning file instance.
+ *
+ * \param *message	Pointer to the message block.
+ * \return		TRUE to report that the message was handled.
  */
 
 static osbool runner_task_window_output(wimp_message *message)

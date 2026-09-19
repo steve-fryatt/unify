@@ -42,6 +42,7 @@
 enum file_instance_status {
 	FILE_INSTANCE_STATUS_UNKNOWN,
 	FILE_INSTANCE_STATUS_READY_TO_RUN,		/**< Files OK, ready to run tests.		*/
+	FILE_INSTANCE_STATUS_IN_QUEUE,			/**< Moved from ready into execution queue.	*/
 	FILE_INSTANCE_STATUS_PASS,
 	FILE_INSTANCE_STATUS_FAIL,
 	FILE_INSTANCE_STATUS_ERROR_NO_FILES,		/**< Neither source nor executable found.	*/
@@ -49,7 +50,9 @@ enum file_instance_status {
 	FILE_INSTANCE_STATUS_ERROR_NO_EXECUTABLE,	/**< Executable file is missing, only source.	*/
 	FILE_INSTANCE_STATUS_ERROR_DUPLICATE_SOURCE,	/**< There was already a source.		*/
 	FILE_INSTANCE_STATUS_ERROR_DUPLICATE_EXECUTABLE,/**< There was already an executable.		*/
-	FILE_INSTANCE_STATUS_ERROR_BAD_FILES		/**< Can't work out the file state.		*/
+	FILE_INSTANCE_STATUS_ERROR_BAD_FILES,		/**< Can't work out the file state.		*/
+	FILE_INSTANCE_STATUS_ERROR_FAILED_TO_QUEUE,	/**< Job failed to be queued.			*/
+	FILE_INSTANCE_STATUS_ERROR_FALIED_TO_EXECUTE,	/**< TaskWindow failed to execute.		*/
 };
 
 /**
@@ -199,39 +202,87 @@ osbool file_instance_save_log(struct file_instance_block *instance, FILE *file, 
 osbool file_instance_compare_object(struct  file_instance_block *instance, char *clean_name, osgbpb_info *entry);
 
 /**
- * TODO
+ * Add the details of a source file to a file instance, returning a pointer to
+ * the (possibly new) instance.
+ *
+ * For a new instance, the file will be added with only some basic sanity
+ * checks. If this is an updated instance, then if the file details appear to
+ * have changed, the instance will be cloned and a pointer to the clone
+ * returned.
+ *
+ * \param *instance	Pointer to the file instance in question.
+ * \param *set		Pointer to the file set which is being constructed.
+ * \param *entry	Pointer to the OS_GBPB data for the file to be added.
+ * \return		A pointer to the instance, which will either be the same
+ *			one originally supplied or a new clone.
  */
 
 struct file_instance_block *file_instance_add_source_file(struct file_instance_block *instance, struct file_set_block *set, osgbpb_info *entry);
 
 /**
- * TODO
+ * Add the details of an executable file to a file instance, returning a pointer
+ * to the (possibly new) instance.
+ *
+ * For a new instance, the file will be added with only some basic sanity
+ * checks. If this is an updated instance, then if the file details appear to
+ * have changed, the instance will be cloned and a pointer to the clone
+ * returned.
+ *
+ * \param *instance	Pointer to the file instance in question.
+ * \param *set		Pointer to the file set which is being constructed.
+ * \param *entry	Pointer to the OS_GBPB data for the file to be added.
+ * \return		A pointer to the instance, which will either be the same
+ *			one originally supplied or a new clone.
  */
 
 struct file_instance_block *file_instance_add_executable_file(struct file_instance_block *instance, struct file_set_block *set, osgbpb_info *entry);
 
 /**
- * TODO
+ * Perform some pre-flight validation on a new file instance.
+ *
+ * \param *instance	Pointer to the file instance to be validated.
+ * \param *set		Pointer to the file set block requesting the validation.
+ * \return		TRUE if the file instance is new to this file set;
+ *			otherwise FALSE.
  */
 
 osbool file_instance_validate_files(struct file_instance_block *instance, struct file_set_block *set);
 
 /**
- * TODO
+ * Attempt to queue a file instance for execution.
+ *
+ * \param *instance	Pointer to the file instance to be executed.
  */
 
 void file_instance_execute(struct file_instance_block *instance);
 
 /**
- * TODO
+ * Accept TaskWindow output from the runner and add it to the log for a
+ * file instance. If a log doesn't exist, it will be created.
+ *
+ * \param *instance	Pointer to the file instance to be updated.
+ * \param *content	Pointer to the new log content. This does not need
+ *			to be zero-terminated.
+ * \param length	The length of the content, in bytes.
  */
 
 void file_instance_take_log_content(struct file_instance_block *instance, char *content, size_t length);
 
 /**
- * TODO
+ * Called by the runner if the attempt to launch the executable in TaskWindow
+ * failed.
+ *
+ * \param *instance		Pointer to the instance affected.
  */
 
-void file_instance_finish_execution(struct file_instance_block *instance);
+void file_instance_execution_falied(struct file_instance_block *instance);
+
+/**
+ * Called by the runner when the task has completed execution.
+ *
+ * \param *instance		Pointer to the instance affected.
+ */
+
+void file_instance_execution_finished(struct file_instance_block *instance);
 
 #endif
