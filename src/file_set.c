@@ -280,7 +280,7 @@ static unsigned file_set_add_object(struct file_set_block *instance, struct file
 }
 
 /**
- * Given a file set and a window instance, add the connetns of the file set
+ * Given a file set and a window instance, add the contents of the file set
  * to the window.
  *
  * \param *instance		Pointer to the file set to be added.
