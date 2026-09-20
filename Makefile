@@ -42,6 +42,7 @@ OBJS =  date_time.o	\
 	project.o	\
 	runner.o	\
 	suite.o		\
+	test_instance.o	\
 	textdump.o	\
 	window.o
 

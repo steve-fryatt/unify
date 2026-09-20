@@ -350,12 +350,15 @@ struct file_set_block *file_set_find_next_object(struct file_set_block *instance
  *
  * \param *instance		Pointer to the file set instance of interest.
  * \param line			The line number from which to return details.
+ * \param entry			The entry within the line from which to return
+ *				details.
  * \param *details		Pointer to a structure in memory to hold the
  *				returned details.
  * \return			TRUE if successful; FALSE on error.
  */
 
-osbool file_set_get_line_details(struct file_set_block *instance, int line, struct file_instance_line_details *details)
+osbool file_set_get_line_details(struct file_set_block *instance, int line, int entry,
+		struct file_instance_line_details *details)
 {
 	if (instance == NULL || instance->objects == NULL)
 		return FALSE;
@@ -363,7 +366,7 @@ osbool file_set_get_line_details(struct file_set_block *instance, int line, stru
 	if (line < 0 || line >= instance->object_count)
 		return FALSE;
 
-	return file_instance_get_line_details(instance->objects[line], instance, details);
+	return file_instance_get_line_details(instance->objects[line], instance, entry, details);
 }
 
 /**

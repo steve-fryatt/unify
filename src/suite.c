@@ -514,14 +514,16 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 
 	struct file_instance_line_details line_details;
 
+	if (!file_set_get_line_details(instance->current_file_set, fold, entry, &line_details))
+		return FALSE;
+
+	if (line_details.name == TEXTDUMP_NULL)
+		return FALSE;
+
+	content->text = textdump_base + line_details.name;
+
 	if (entry < 0) {
-		if (!file_set_get_line_details(instance->current_file_set, fold, &line_details))
-			return FALSE;
 
-		if (line_details.name == TEXTDUMP_NULL)
-			return FALSE;
-
-		content->text = textdump_base + line_details.name;
 		switch (line_details.status) {
 		case FILE_INSTANCE_STATUS_PASS:
 			content->status = WINDOW_STATUS_PASS;
@@ -539,11 +541,10 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 			break;
 		}
 
-		content->count = 0;
-		content->total = 100;
+		content->count = line_details.count;
+		content->total = line_details.total;
 		content->faded = !line_details.is_new;
 	} else {
-		content->text = "This is a line";
 		content->status = WINDOW_STATUS_UNKNOWN;
 	}
 	return TRUE;

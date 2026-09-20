@@ -119,7 +119,13 @@ static osbool project_unity_scan_source(FILE *fh, struct project_source_callback
 }
 
 /**
- * TODO
+ * Scan a bracketed block (ie. text within { and }) within a file.
+ *
+ * \param *fh		The handle of the source file to be scanned.
+ * \param level		The nesting level of the block, starting with zero as
+ *			the top level of the file.
+ * \param *callbacks	Pointer to details of the callbacks to be used.
+ * \return		TRUE if successful; FALSE on failure.
  */
 
 static osbool project_unity_scan_block(FILE *fh, int level, struct project_source_callbacks *callbacks)
@@ -182,7 +188,12 @@ static osbool project_unity_scan_block(FILE *fh, int level, struct project_sourc
 }
 
 /**
- * TODO
+ * We think that we have found a function definition, so extract the function
+ * name and pass it back to the caller.
+ *
+ * \param *fh		The handle of the source file to be scanned.
+ * \param *callbacks	Pointer to details of the callbacks to be used.
+ * \return		TRUE if successful; FALSE on failure.
  */
 
 static osbool project_unity_found_definition(FILE *fh, struct project_source_callbacks *callbacks)
@@ -206,7 +217,12 @@ static osbool project_unity_found_definition(FILE *fh, struct project_source_cal
 }
 
 /**
- * TODO
+ * We think that we have found a function call, so extract the function
+ * name and pass it back to the caller.
+ *
+ * \param *fh		The handle of the source file to be scanned.
+ * \param *callbacks	Pointer to details of the callbacks to be used.
+ * \return		TRUE if successful; FALSE on failure.
  */
 
 static osbool project_unity_found_call(FILE *fh, struct project_source_callbacks *callbacks)
