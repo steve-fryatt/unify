@@ -319,10 +319,7 @@ void file_set_add_to_window(struct file_set_block *instance, struct window_insta
 
 struct file_set_block *file_set_find_previous_object(struct file_set_block *instance)
 {
-	if (instance == NULL)
-		return NULL;
-
-	return instance->previous;
+	return (instance == NULL) ? NULL : instance->previous;
 }
 
 /**
