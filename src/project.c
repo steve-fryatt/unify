@@ -41,11 +41,15 @@
 
 /* SF-Lib header files. */
 
+#include <sflib/debug.h>
+
 /* Application header files */
 
 #include "project.h"
 
 #include "file_instance.h"
+#include "log.h"
+#include "string_match.h"
 
 /**
  * The maximum length of a function name.
@@ -64,6 +68,7 @@ static osbool project_unity_scan_source(FILE *fh, struct project_source_callback
 static osbool project_unity_scan_block(FILE *fh, int level, struct project_source_callbacks *callbacks);
 static osbool project_unity_found_definition(FILE *fh, struct project_source_callbacks *callbacks);
 static osbool project_unity_found_call(FILE *fh, struct project_source_callbacks *callbacks);
+static osbool project_unity_scan_log(struct log_instance *log, struct project_log_callbacks *callbacks);
 
 /**
  * The project defintions.
@@ -72,7 +77,8 @@ static osbool project_unity_found_call(FILE *fh, struct project_source_callbacks
 static struct project_details project_definitions[] = {
 	{
 		.type = PROJECT_TYPE_UNITY_GCCSDK_SFTOOLS,
-		.source_decoder = project_unity_scan_source
+		.source_decoder = project_unity_scan_source,
+		.log_decoder = project_unity_scan_log
 	},
 	{
 		.type = PROJECT_TYPE_UNKNOWN
@@ -210,7 +216,8 @@ static osbool project_unity_found_definition(FILE *fh, struct project_source_cal
 
 	if (c == ';')
 		fseek(fh, -1, SEEK_CUR);
-	else if (c == '(' && strcmp(buffer, "main") && strcmp(buffer, "setUp") && strcmp(buffer, "tearDown"))
+	else if (callbacks->found_definition != NULL && c == '(' &&
+			strcmp(buffer, "main") && strcmp(buffer, "setUp") && strcmp(buffer, "tearDown"))
 		callbacks->found_definition(callbacks->owner, buffer, -1);
 
 	return (c == '(') ? TRUE : FALSE;
@@ -239,8 +246,150 @@ static osbool project_unity_found_call(FILE *fh, struct project_source_callbacks
 
 	if (c == ';')
 		fseek(fh, -1, SEEK_CUR);
-	else if (c == ')')
+	else if (callbacks->found_call != NULL && c == ')')
 		callbacks->found_call(callbacks->owner, buffer, -1);
 
 	return (c == ')') ? TRUE : FALSE;
+}
+
+/**
+ * Scan a log from a Unity project.
+ *
+ * \param *log		Pointer to the log instance to be scanned.
+ * \param *callbacks	Pointer to details of the callbacks to be used.
+ * \return		TRUE if successful; FALSE on failure.
+ */
+
+static osbool project_unity_scan_log(struct log_instance *log, struct project_log_callbacks *callbacks)
+{
+	if (log == NULL || callbacks == NULL)
+		return FALSE;
+
+	char function_name[PROJECT_MAX_FUNCTION_LEN];
+
+	/* Read the individual result lines. */
+
+	unsigned index = LOG_NO_LINE;
+	osbool found_blank_line = FALSE;
+
+	while ((index = log_read_line(log)) != LOG_NO_LINE) {
+		char *line = log_get_line_pointer(log, index);
+
+		/* There should be a blank line at the end of the test results. */
+
+		if (*line == '\0') {
+			found_blank_line = TRUE;
+			break;
+		}
+
+		/* This must be a log line. */
+
+		int result = -1, line_number = -1;
+
+		if (!string_match_start(line))
+			continue;
+		if (!string_match_skip_forward_to(":", NULL, 0))
+			continue;
+		if (!string_match_find_number(&line_number))
+			continue;
+		if (!string_match_test_string(":"))
+			continue;
+		if (!string_match_skip_forward_to(":", function_name, PROJECT_MAX_FUNCTION_LEN))
+			continue;
+		if (!string_match_find_option((char *[]) { "PASS", "FAIL", "IGNORE", NULL }, &result))
+			continue;
+
+		enum project_outcome outcome = PROJECT_OUTCOME_UNKNOWN;
+
+		switch (result) {
+		case 0:
+			outcome = PROJECT_OUTCOME_PASS;
+			break;
+		case 1:
+			outcome = PROJECT_OUTCOME_FAIL;
+			break;
+		case 2:
+			outcome = PROJECT_OUTCOME_SKIP;
+			break;
+		}
+
+		if (callbacks->found_test_result != NULL)
+			callbacks->found_test_result(callbacks->owner, function_name, line_number, outcome);
+	}
+
+	if (found_blank_line == FALSE)
+		return FALSE;
+
+	/* Look for the breaker. */
+
+	index = log_read_line(log);
+	if (index == LOG_NO_LINE)
+		return FALSE;
+
+	char *line = log_get_line_pointer(log, index);
+	if (!string_match_start(line))
+		return FALSE;
+	if (!string_match_test_string("-----------------------"))
+		return FALSE;
+	if (!string_match_test_end())
+		return FALSE;
+
+	/* Look for the totals. */
+
+	index = log_read_line(log);
+	if (index == LOG_NO_LINE)
+		return FALSE;
+
+	line = log_get_line_pointer(log, index);
+	if (!string_match_start(line))
+		return FALSE;
+
+	int tests = 0, failures = 0, skipped = 0;
+	if (!string_match_find_number(&tests))
+		return FALSE;
+	if (!string_match_test_string("Tests"))
+		return FALSE;
+	if (!string_match_find_number(&failures))
+		return FALSE;
+	if (!string_match_test_string("Failures"))
+		return FALSE;
+	if (!string_match_find_number(&skipped))
+		return FALSE;
+	if (!string_match_test_string("Ignored"))
+		return FALSE;
+	if (!string_match_test_end())
+		return FALSE;
+
+	if (callbacks->found_summary != NULL)
+		callbacks->found_summary(callbacks->owner, tests, tests - (failures + skipped), failures, skipped);
+
+	/* Look for the summary. */
+
+	index = log_read_line(log);
+	if (index == LOG_NO_LINE)
+		return FALSE;
+
+	line = log_get_line_pointer(log, index);
+	if (!string_match_start(line))
+		return FALSE;
+
+	int result = -1;
+	if (!string_match_find_option((char *[]) { "OK", "FAIL", NULL }, &result))
+		return FALSE;
+
+	enum project_outcome outcome = PROJECT_OUTCOME_UNKNOWN;
+
+	switch (result) {
+	case 0:
+		outcome = PROJECT_OUTCOME_PASS;
+		break;
+	case 1:
+		outcome = PROJECT_OUTCOME_FAIL;
+		break;
+	}
+
+	if (callbacks->found_overall_result != NULL)
+		callbacks->found_overall_result(callbacks->owner, outcome);
+
+	return FALSE;
 }

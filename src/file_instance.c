@@ -188,6 +188,10 @@ static struct file_instance_block *file_instance_clone_instance(struct file_set_
 static void file_instance_store_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry);
 static void file_instance_found_definition(struct file_instance_block *instance, char *name, int line);
 static void file_instance_found_call(struct file_instance_block *instance, char *name, int line);
+static void file_instance_scan_log(struct file_instance_block *instance);
+static void file_instance_found_test_result(struct file_instance_block *instance, char *name, int line, enum project_outcome outcome);
+static void file_instance_found_summary(struct file_instance_block *instance, int tests, int passed, int failed, int skipped);
+static void file_instance_found_overall_result(struct file_instance_block *instance, enum project_outcome outcome);
 static unsigned file_instance_find_test(struct file_instance_block *instance, char *name);
 static unsigned file_instance_add_test(struct file_instance_block *instance);
 
@@ -727,7 +731,7 @@ void file_instance_scan_source(struct file_instance_block *instance)
 	};
 
 	struct project_details *project = suite_get_project_details(instance->parent);
-	if (project == NULL) {
+	if (project == NULL || project->source_decoder == NULL) {
 		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_SOURCE;
 		return;
 	}
@@ -816,76 +820,6 @@ static void file_instance_found_call(struct file_instance_block *instance, char 
 		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_TESTS;
 
 	debug_printf("This has become test %u in the file.", test);
-}
-
-/**
- * Given a test function name, locate a matching test within the file instance.
- * This returns an index into the tests flex array. If no match was found, the
- * returned index will contain a newly-created test record.
- *
- * \param *instance	Pointer to the file instance to be searched.
- * \param *name		Pointer to the function name to be searched for.
- * \return		The index of the record, or FILE_INSTANCE_NOT_FOUND if
- *			for some reason no match could be found and no new
- *			record could be created.
- */
-
-static unsigned file_instance_find_test(struct file_instance_block *instance, char *name)
-{
-	if (instance == NULL || instance->tests == NULL)
-		return FILE_INSTANCE_NOT_FOUND;
-
-	for (unsigned i = 0; i < instance->test_count; i++) {
-		if (test_instance_compare_test(&(instance->tests[i]), instance->parent, name) == TRUE)
-			return i;
-	}
-
-	unsigned new = file_instance_add_test(instance);
-	if (new == FILE_INSTANCE_NOT_FOUND)
-		return FILE_INSTANCE_NOT_FOUND;
-
-	/* Store the name here, because if it shifts the flex heap that would
-	 * break the pointer to the test instance if we did it in the called
-	 * function!
-	 */
-
-	unsigned test_name = suite_store_text(instance->parent, name);
-
-	test_instance_populate_new_test(&(instance->tests[new]), test_name);
-
-	return new;
-}
-
-/**
- * Add a new test instance record into the tests array of a file instance.
- *
- * \param *instance	Pointer to the file instance in which to create the
- *			new test.
- * \return		The index into the array of the new test, or
- *			FILE_INSTANCE_NOT_FOUND if the operation failed.
- */
-
-static unsigned file_instance_add_test(struct file_instance_block *instance)
-{
-	if (instance == NULL)
-		return FILE_INSTANCE_NOT_FOUND;
-
-	if (instance->test_count >= instance->test_space) {
-		debug_printf("We need more space...");
-		size_t new_space = instance->test_space;
-
-		while (new_space <= instance->test_count)
-			new_space += FILE_INSTANCE_ALLOCATION_UNIT;
-
-		if (flexutils_resize((void **) &(instance->tests), sizeof(struct test_instance_block), new_space))
-			instance->test_space = new_space;
-		debug_printf("Space increased to %u units", instance->test_space);
-	}
-
-	if (instance->test_count >= instance->test_space)
-		return FILE_INSTANCE_NOT_FOUND;
-
-	return instance->test_count++;
 }
 
 /**
@@ -990,6 +924,145 @@ void file_instance_execution_finished(struct file_instance_block *instance)
 	if (instance == NULL)
 		return;
 
-	if (instance->log != NULL)
+	if (instance->log != NULL) {
+		instance->status = FILE_INSTANCE_STATUS_EXECUTED;
+
 		log_finish_text(instance->log);
+		file_instance_scan_log(instance);
+	} else {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_NO_OUTPUT;
+	}
+}
+
+/**
+ * Scan the log associated with a file instance, so that the test results
+ * contained within it can be added to the file instance.
+ *
+ * This calls the log scan functions provided by the project type associated
+ * with the parent test suite.
+ *
+ * \param *instance	Pointer to the file instance to be scanned.
+ */
+
+static void file_instance_scan_log(struct file_instance_block *instance)
+{
+	if (instance == NULL || instance->status != FILE_INSTANCE_STATUS_EXECUTED)
+		return;
+
+	struct project_log_callbacks callbacks = {
+		.owner = instance,
+		.found_test_result = file_instance_found_test_result,
+		.found_summary = file_instance_found_summary,
+		.found_overall_result = file_instance_found_overall_result
+	};
+
+	struct project_details *project = suite_get_project_details(instance->parent);
+	if (project == NULL || project->log_decoder == NULL) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_LOG;
+		return;
+	}
+
+	/* Scan the log. */
+
+	if (project->log_decoder(instance->log, &callbacks) == TRUE)
+		instance->status = FILE_INSTANCE_STATUS_READY_TO_REPORT;
+	else
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_LOG;
+}
+
+/**
+ * TODO
+ */
+
+static void file_instance_found_test_result(struct file_instance_block *instance, char *name, int line, enum project_outcome outcome)
+{
+	debug_printf("Found test result: name=%s, line=%d, outcome=%d", name, line, outcome);
+}
+
+/**
+ * TODO
+ */
+
+static void file_instance_found_summary(struct file_instance_block *instance, int tests, int passed, int failed, int skipped)
+{
+	debug_printf("Found summary: pass=%d, fail=%d, skip=%d, total=%d", passed, failed, skipped, tests);
+}
+
+/**
+ * TODO
+ */
+
+static void file_instance_found_overall_result(struct file_instance_block *instance, enum project_outcome outcome)
+{
+	debug_printf("Found overall result: %d", outcome);
+}
+
+/**
+ * Given a test function name, locate a matching test within the file instance.
+ * This returns an index into the tests flex array. If no match was found, the
+ * returned index will contain a newly-created test record.
+ *
+ * \param *instance	Pointer to the file instance to be searched.
+ * \param *name		Pointer to the function name to be searched for.
+ * \return		The index of the record, or FILE_INSTANCE_NOT_FOUND if
+ *			for some reason no match could be found and no new
+ *			record could be created.
+ */
+
+static unsigned file_instance_find_test(struct file_instance_block *instance, char *name)
+{
+	if (instance == NULL || instance->tests == NULL)
+		return FILE_INSTANCE_NOT_FOUND;
+
+	for (unsigned i = 0; i < instance->test_count; i++) {
+		if (test_instance_compare_test(&(instance->tests[i]), instance->parent, name) == TRUE)
+			return i;
+	}
+
+	unsigned new = file_instance_add_test(instance);
+	if (new == FILE_INSTANCE_NOT_FOUND)
+		return FILE_INSTANCE_NOT_FOUND;
+
+	/* Store the name here, because if it shifts the flex heap that would
+	 * break the pointer to the test instance if we did it in the called
+	 * function!
+	 */
+
+	unsigned test_name = suite_store_text(instance->parent, name);
+
+	test_instance_populate_new_test(&(instance->tests[new]), test_name);
+
+	return new;
+}
+
+/**
+ * Add a new test instance record into the tests array of a file instance.
+ *
+ * \param *instance	Pointer to the file instance in which to create the
+ *			new test.
+ * \return		The index into the array of the new test, or
+ *			FILE_INSTANCE_NOT_FOUND if the operation failed.
+ */
+
+static unsigned file_instance_add_test(struct file_instance_block *instance)
+{
+	if (instance == NULL)
+		return FILE_INSTANCE_NOT_FOUND;
+
+	if (instance->test_count >= instance->test_space) {
+		debug_printf("We need more space...");
+		size_t new_space = instance->test_space;
+
+		while (new_space <= instance->test_count)
+			new_space += FILE_INSTANCE_ALLOCATION_UNIT;
+
+		if (flexutils_resize((void **) &(instance->tests), sizeof(struct test_instance_block), new_space))
+			instance->test_space = new_space;
+		debug_printf("Space increased to %u units", instance->test_space);
+	}
+
+	if (instance->test_count >= instance->test_space)
+		return FILE_INSTANCE_NOT_FOUND;
+
+	return instance->test_count++;
 }

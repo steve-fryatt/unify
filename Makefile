@@ -41,6 +41,7 @@ OBJS =  date_time.o	\
 	main.o		\
 	project.o	\
 	runner.o	\
+	string_match.o	\
 	suite.o		\
 	test_instance.o	\
 	textdump.o	\

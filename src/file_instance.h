@@ -44,6 +44,8 @@ enum file_instance_status {
 	FILE_INSTANCE_STATUS_READY_TO_SCAN,			/**< Files OK, ready to scan source.		*/
 	FILE_INSTANCE_STATUS_READY_TO_RUN,			/**< Source scanned, ready to run tests.	*/
 	FILE_INSTANCE_STATUS_IN_QUEUE,				/**< Moved from ready into execution queue.	*/
+	FILE_INSTANCE_STATUS_EXECUTED,				/**< Execution is completed.			*/
+	FILE_INSTANCE_STATUS_READY_TO_REPORT,			/**< Log scanned, ready to report to the user.	*/
 	FILE_INSTANCE_STATUS_PASS,
 	FILE_INSTANCE_STATUS_FAIL,
 	FILE_INSTANCE_STATUS_ERROR_NO_FILES,			/**< Neither source nor executable found.	*/
@@ -56,6 +58,8 @@ enum file_instance_status {
 	FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_SOURCE,	/**< Failed to scan the source file.		*/
 	FILE_INSTANCE_STATUS_ERROR_FAILED_TO_QUEUE,		/**< Job failed to be queued.			*/
 	FILE_INSTANCE_STATUS_ERROR_FALIED_TO_EXECUTE,		/**< TaskWindow failed to execute.		*/
+	FILE_INSTANCE_STATUS_ERROR_NO_OUTPUT,			/**< No output was received from the tests.	*/
+	FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_LOG		/**< Failed to scan the log.			*/
 };
 
 /**
