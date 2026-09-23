@@ -517,36 +517,45 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 	if (!file_set_get_line_details(instance->current_file_set, fold, entry, &line_details))
 		return FALSE;
 
+	/* Sort out the object name. */
+
 	if (line_details.name == TEXTDUMP_NULL)
 		return FALSE;
 
 	content->text = textdump_base + line_details.name;
 
+	/* Map the object status. */
+
+	switch (line_details.status) {
+	case FILE_INSTANCE_STATUS_PASS:
+		content->status = WINDOW_STATUS_PASS;
+		break;
+	case FILE_INSTANCE_STATUS_FAIL:
+		content->status = WINDOW_STATUS_FAIL;
+		break;
+	case FILE_INSTANCE_STATUS_UNKNOWN:
+	case FILE_INSTANCE_STATUS_READY_TO_SCAN:
+	case FILE_INSTANCE_STATUS_READY_TO_RUN:
+	case FILE_INSTANCE_STATUS_IN_QUEUE:
+	case FILE_INSTANCE_STATUS_EXECUTED:
+	case FILE_INSTANCE_STATUS_READY_TO_REPORT:
+		content->status = WINDOW_STATUS_UNKNOWN;
+		break;
+	default:
+		content->status = WINDOW_STATUS_ERROR;
+		break;
+	}
+
+	/* Handle the bits which vary between folds and entries. */
+
 	if (entry < 0) {
-
-		switch (line_details.status) {
-		case FILE_INSTANCE_STATUS_PASS:
-			content->status = WINDOW_STATUS_PASS;
-			break;
-		case FILE_INSTANCE_STATUS_FAIL:
-			content->status = WINDOW_STATUS_FAIL;
-			break;
-		case FILE_INSTANCE_STATUS_UNKNOWN:
-		case FILE_INSTANCE_STATUS_READY_TO_RUN:
-		case FILE_INSTANCE_STATUS_IN_QUEUE:
-			content->status = WINDOW_STATUS_UNKNOWN;
-			break;
-		default:
-			content->status = WINDOW_STATUS_ERROR;
-			break;
-		}
-
 		content->count = line_details.count;
 		content->total = line_details.total;
 		content->faded = !line_details.is_new;
 	} else {
-		content->status = WINDOW_STATUS_UNKNOWN;
+		content->faded = FALSE;
 	}
+
 	return TRUE;
 }
 

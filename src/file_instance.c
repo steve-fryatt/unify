@@ -177,6 +177,31 @@ struct file_instance_block {
 	 * The number of tests in the test list.
 	 */
 	size_t test_count;
+
+	/**
+	 * The passed test count reported in the log summary.
+	 */
+	int summary_passes;
+
+	/**
+	 * The failed test count reported in the log summary.
+	 */
+	int summary_fails;
+
+	/**
+	 * The skipped test count reported in the log summary.
+	 */
+	int summary_skipped;
+
+	/**
+	 * The total test count reported in the log summary.
+	 */
+	int summary_total;
+
+	/**
+	 * The summary outcome reported from the log.
+	 */
+	enum project_outcome summary_outcome;
 };
 
 /* Global variables. */
@@ -223,6 +248,12 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
 	new->test_space = FILE_INSTANCE_ALLOCATION_UNIT;
 	new->test_count = 0;
 	new->log = NULL;
+
+	new->summary_passes = 0;
+	new->summary_fails = 0;
+	new->summary_skipped = 0;
+	new->summary_total = 0;
+	new->summary_outcome = PROJECT_OUTCOME_UNKNOWN;
 
 	new->name = suite_store_text(parent, name);
 	if (new->name == TEXTDUMP_NULL) {
@@ -372,7 +403,7 @@ osbool file_instance_get_line_details(struct file_instance_block *instance, stru
 		details->name = instance->name;
 		details->status = instance->status;
 		details->total = instance->test_count;
-		details->count = 0;
+		details->count = instance->summary_passes; // TODO -- This probably needs to be done correctly!
 	} else if (test < instance->test_count) {
 		if (test_instance_get_line_details(&(instance->tests[test]), details) == FALSE)
 			return FALSE;
@@ -773,6 +804,9 @@ void file_instance_scan_source(struct file_instance_block *instance)
 
 static void file_instance_found_definition(struct file_instance_block *instance, char *name, int line)
 {
+	if (instance == NULL || name == NULL)
+		return;
+
 	debug_printf("We've found a definition of %s at line %d", name, line);
 
 	/* Find the test or create a new one. */
@@ -805,6 +839,9 @@ static void file_instance_found_definition(struct file_instance_block *instance,
 
 static void file_instance_found_call(struct file_instance_block *instance, char *name, int line)
 {
+	if (instance == NULL || name == NULL)
+		return;
+
 	debug_printf("We've found a call to %s at line %d", name, line);
 
 	/* Find the test or create a new one. */
@@ -971,30 +1008,99 @@ static void file_instance_scan_log(struct file_instance_block *instance)
 }
 
 /**
- * TODO
+ * Handle callbacks from the project log scanner, reporting that a test result
+ * has been identified.
+ *
+ * \param *instance	Pointer to the associated file instance.
+ * \param *name		Pointer to the name of the identified test function.
+ * \param line		The line number from the source file at which the
+ *			test was identified in the log, or -1 if this isn't
+ *			known.
+ * \param outcome	The outcome reported for the test.
  */
 
 static void file_instance_found_test_result(struct file_instance_block *instance, char *name, int line, enum project_outcome outcome)
 {
+	if (instance == NULL || name == NULL)
+		return;
+
 	debug_printf("Found test result: name=%s, line=%d, outcome=%d", name, line, outcome);
+
+	/* Find the test or create a new one. */
+
+	unsigned test = file_instance_find_test(instance, name);
+
+	if (test == FILE_INSTANCE_NOT_FOUND) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_TESTS;
+		return;
+	}
+
+	if (test_instance_add_location(&(instance->tests[test]), TEST_INSTANCE_LOCATION_RESULT, line) == FALSE)
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_TESTS;
+
+	enum test_instance_status status = TEST_INSTANCE_STATUS_UNKNOWN;
+
+	switch (outcome) {
+	case PROJECT_OUTCOME_PASS:
+		status = TEST_INSTANCE_STATUS_PASSED;
+		break;
+	case PROJECT_OUTCOME_FAIL:
+		status = TEST_INSTANCE_STATUS_FAILED;
+		break;
+	case PROJECT_OUTCOME_SKIP:
+		status = TEST_INSTANCE_STATUS_SKIPPED;
+		break;
+	default:
+		status = TEST_INSTANCE_STATUS_UNKNOWN;
+		break;
+	}
+
+	if (test_instance_update_status(&(instance->tests[test]), status) == FALSE)
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_TESTS;
+
+	debug_printf("This has become test %u in the file.", test);
 }
 
 /**
- * TODO
+ * Handle callbacks from the project log scanner, reporting that a summary of
+ * a file's results has been identified.
+ *
+ * \param *instance	Pointer to the associated file instance.
+ * \param tests		The total number of tests reported.
+ * \param passed	The number of tests reported as having passed.
+ * \param failed	The number of tests reported as having failed.
+ * \param skipped	The number of tests reported as having been skipped.
  */
 
 static void file_instance_found_summary(struct file_instance_block *instance, int tests, int passed, int failed, int skipped)
 {
+	if (instance == NULL)
+		return;
+
 	debug_printf("Found summary: pass=%d, fail=%d, skip=%d, total=%d", passed, failed, skipped, tests);
+
+	instance->summary_passes = passed;
+	instance->summary_fails = failed;
+	instance->summary_skipped = skipped;
+	instance->summary_total = tests;
 }
 
 /**
- * TODO
+ * Handle callbacks from the project log scanner, reporting that an overall
+ * file result has been identified
+ *
+ * \param *instance	Pointer to the associated file instance.
+ * \param outcome	The outcome reported for the test file.
  */
 
 static void file_instance_found_overall_result(struct file_instance_block *instance, enum project_outcome outcome)
 {
+	if (instance == NULL)
+		return;
+
 	debug_printf("Found overall result: %d", outcome);
+
+	instance->summary_outcome = outcome;
 }
 
 /**

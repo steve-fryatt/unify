@@ -75,8 +75,17 @@ osbool test_instance_get_line_details(struct test_instance_block *instance, stru
 		return FALSE;
 
 	details->name = instance->name;
-	details->status = FILE_INSTANCE_STATUS_UNKNOWN;
-
+	switch (instance->status) {
+	case TEST_INSTANCE_STATUS_PASSED:
+		details->status = FILE_INSTANCE_STATUS_PASS;
+		break;
+	case TEST_INSTANCE_STATUS_FAILED:
+		details->status = FILE_INSTANCE_STATUS_FAIL;
+		break;
+	default:
+		details->status = FILE_INSTANCE_STATUS_UNKNOWN;
+		break;
+	}
 	return TRUE;
 }
 
@@ -96,8 +105,7 @@ void test_instance_populate_new_test(struct test_instance_block *instance, unsig
 
 	instance->name = name;
 	instance->location = TEST_INSTANCE_LOCATION_NONE;
-
-	debug_printf("Textdump offset = %u", instance->name);
+	instance->status = TEST_INSTANCE_STATUS_UNKNOWN;
 }
 
 /**
@@ -123,6 +131,31 @@ osbool test_instance_add_location(struct test_instance_block *instance, enum tes
 		return FALSE;
 
 	instance->location |= location;
+
+	return TRUE;
+}
+
+/**
+ * Update the status for a test instance.
+ *
+ * If the test status has already been changed from UNKNOWN, failure will be
+ * returned.
+ *
+ * \param *instance	Pointer to the test instance to be updated.
+ * \param status	The status to be set for the test.
+ * \return		TRUE if successful; FALSE if the test could not be
+ *			updated.
+ */
+
+osbool test_instance_update_status(struct test_instance_block *instance, enum test_instance_status status)
+{
+	if (instance == NULL)
+		return FALSE;
+
+	if (instance->status != TEST_INSTANCE_STATUS_UNKNOWN)
+		return FALSE;
+
+	instance->status = status;
 
 	return TRUE;
 }

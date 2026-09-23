@@ -391,5 +391,5 @@ static osbool project_unity_scan_log(struct log_instance *log, struct project_lo
 	if (callbacks->found_overall_result != NULL)
 		callbacks->found_overall_result(callbacks->owner, outcome);
 
-	return FALSE;
+	return TRUE;
 }

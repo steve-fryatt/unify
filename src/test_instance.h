@@ -38,9 +38,17 @@ enum test_instance_location {
 	TEST_INSTANCE_LOCATION_ALL = 7
 };
 
+enum test_instance_status {
+	TEST_INSTANCE_STATUS_UNKNOWN,
+	TEST_INSTANCE_STATUS_PASSED,
+	TEST_INSTANCE_STATUS_FAILED,
+	TEST_INSTANCE_STATUS_SKIPPED
+};
+
 struct test_instance_block {
 	unsigned name;
 	enum test_instance_location location;
+	enum test_instance_status status;
 };
 
 #include "file_instance.h"
@@ -82,6 +90,20 @@ void test_instance_populate_new_test(struct test_instance_block *instance, unsig
  */
 
 osbool test_instance_add_location(struct test_instance_block *instance, enum test_instance_location location, int line);
+
+/**
+ * Update the status for a test instance.
+ *
+ * If the test status has already been changed from UNKNOWN, failure will be
+ * returned.
+ *
+ * \param *instance	Pointer to the test instance to be updated.
+ * \param status	The status to be set for the test.
+ * \return		TRUE if successful; FALSE if the test could not be
+ *			updated.
+ */
+
+osbool test_instance_update_status(struct test_instance_block *instance, enum test_instance_status status);
 
 /**
  * Compare a test with a name, to see if the two match.
