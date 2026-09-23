@@ -33,6 +33,12 @@
 #include <stdio.h>
 
 /**
+ * A non-log line
+ */
+
+#define LOG_NO_LINE ((unsigned) 0xffffffffu)
+
+/**
  * A log instance.
  */
 
@@ -99,5 +105,31 @@ void log_finish_text(struct log_instance *instance);
  */
 
 osbool log_write_to_file(struct log_instance *instance, FILE *file);
+
+/**
+ * Read a line from a log file. This should be called repeatedly until all
+ * of the available lines have been read.
+ *
+ * Lines can not be read until log_finish_text() has been called.
+ *
+ * \param *instance		Pointer to the log instance to be read.
+ * \return			A line index if a new line is available, or
+ *				LOG_NO_LINE otherwise.
+ */
+unsigned log_read_line(struct log_instance *instance);
+
+/**
+ * Obtain a pointer to a line of log text, given a log line returned by
+ * log_read_line().
+ *
+ * Note that these pointers are into a flex heap, so they should not be
+ * retained and used across any operation which might shift the heap.
+ *
+ * \param *instance		Pointer to the log instance to be read.
+ * \param line			The line index of interest.
+ * \return			Pointer to the line, or NULL.
+ */
+
+char *log_get_line_pointer(struct log_instance *instance, unsigned line);
 
 #endif

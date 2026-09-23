@@ -105,6 +105,15 @@ unsigned suite_store_text(struct suite_block *instance, char *text);
 char *suite_get_textdump_base(struct suite_block *instance);
 
 /**
+ * Return details of the project type of a suite instance.
+ *
+ * \param *instance	Pointer to the test suite instance of interest.
+ * \return		Pointer to the project definition, or NULL.
+ */
+
+struct project_details *suite_get_project_details(struct suite_block *instance);
+
+/**
  * Test whether a file set is the first one stored in a suite instance.
  *
  * \param *instance	Pointer to the test suite instance.
@@ -137,9 +146,12 @@ struct file_instance_block *suite_store_file_instance(struct suite_block *instan
  * \param *buffer	Pointer to the buffer to take the returned path.
  * \param length	The length of the supplied buffer, in bytes.
  * \param folder	The folder to be returned.
+ * \param leafname	A textdump offset for a leafname to append to the path
+ *			in the buffer, or TEXTDUMP_NULL for none.
  * \return		TRUE if successful; FALSE on failure.
  */
 
-osbool suite_read_folder_path(struct suite_block *instance, char *buffer, size_t length, enum suite_folder folder);
+osbool suite_read_folder_path(struct suite_block *instance, char *buffer, size_t length,
+		enum suite_folder folder, unsigned leafname);
 
 #endif

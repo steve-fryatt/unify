@@ -32,7 +32,6 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <stddef.h>
-#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -57,11 +56,20 @@
 
 #include "date_time.h"
 #include "file_set.h"
+#include "flexutils.h"
 #include "log.h"
+#include "project.h"
 #include "runner.h"
 #include "suite.h"
+#include "test_instance.h"
 #include "textdump.h"
 #include "window.h"
+
+/**
+ * The increments to allocate space for test objects.
+ */
+
+#define FILE_INSTANCE_ALLOCATION_UNIT 10
 
 /**
  * The maximum length of a test file name.
@@ -73,7 +81,13 @@
  * The maximum length of a runner command.
  */
 
- #define FILE_INSTANCE_COMMAND_LEN (FILE_INSTANCE_NAME_LEN + 64)
+#define FILE_INSTANCE_COMMAND_LEN (FILE_INSTANCE_NAME_LEN + 64)
+
+/**
+ * A suitable array index hasn't been found.
+ */
+
+#define FILE_INSTANCE_NOT_FOUND ((unsigned) 0xffffffffu)
 
 /* Structure definitions. */
 
@@ -148,6 +162,46 @@ struct file_instance_block {
 	 * The pass, fail or error status of the file instance.
 	 */
 	enum file_instance_status status;
+
+	/**
+	 * Flex block pointer to the list of tests in the file instance.
+	 */
+	struct test_instance_block *tests;
+
+	/**
+	 * The space allocated to tests in the test list.
+	 */
+	size_t test_space;
+
+	/**
+	 * The number of tests in the test list.
+	 */
+	size_t test_count;
+
+	/**
+	 * The passed test count reported in the log summary.
+	 */
+	int summary_passes;
+
+	/**
+	 * The failed test count reported in the log summary.
+	 */
+	int summary_fails;
+
+	/**
+	 * The skipped test count reported in the log summary.
+	 */
+	int summary_skipped;
+
+	/**
+	 * The total test count reported in the log summary.
+	 */
+	int summary_total;
+
+	/**
+	 * The summary outcome reported from the log.
+	 */
+	enum project_outcome summary_outcome;
 };
 
 /* Global variables. */
@@ -157,10 +211,14 @@ struct file_instance_block {
 
 static struct file_instance_block *file_instance_clone_instance(struct file_set_block *initial, struct file_instance_block *template, osbool use_source);
 static void file_instance_store_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry);
-static osbool file_instance_scan_source(char *filename);
-static osbool file_instance_scan_block(FILE *fh, int level);
-static osbool file_instance_found_definition(FILE *fh);
-static osbool file_instance_found_call(FILE *fh);
+static void file_instance_found_definition(struct file_instance_block *instance, char *name, int line);
+static void file_instance_found_call(struct file_instance_block *instance, char *name, int line);
+static void file_instance_scan_log(struct file_instance_block *instance);
+static void file_instance_found_test_result(struct file_instance_block *instance, char *name, int line, enum project_outcome outcome);
+static void file_instance_found_summary(struct file_instance_block *instance, int tests, int passed, int failed, int skipped);
+static void file_instance_found_overall_result(struct file_instance_block *instance, enum project_outcome outcome);
+static unsigned file_instance_find_test(struct file_instance_block *instance, char *name);
+static unsigned file_instance_add_test(struct file_instance_block *instance);
 
 /**
  * Create a new file instance and link it to the supplied parent suite.
@@ -186,11 +244,25 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
 	new->source.name = TEXTDUMP_NULL;
 	new->executable.name = TEXTDUMP_NULL;
 	new->window_object = WINDOW_NULL_FOLD;
+	new->tests = NULL;
+	new->test_space = FILE_INSTANCE_ALLOCATION_UNIT;
+	new->test_count = 0;
 	new->log = NULL;
+
+	new->summary_passes = 0;
+	new->summary_fails = 0;
+	new->summary_skipped = 0;
+	new->summary_total = 0;
+	new->summary_outcome = PROJECT_OUTCOME_UNKNOWN;
 
 	new->name = suite_store_text(parent, name);
 	if (new->name == TEXTDUMP_NULL) {
 		file_instance_delete_instance(new);
+		return NULL;
+	}
+
+	if (!flexutils_allocate((void **) &(new->tests), sizeof(struct test_instance_block), new->test_space)) {
+		heap_free(new);
 		return NULL;
 	}
 
@@ -203,6 +275,10 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
 
 /**
  * Clone an existing file instance and link it to the same parent suite.
+ *
+ * NB: Cloning does not copy tests across from the template instance. It is
+ * assumed that if we're cloning a new instance, enough has changed that the
+ * tests will need to be re-scanned.
  *
  * \param *initial	Pointer to the file set which created the instance.
  * \param *template	Pointer to the file instance which is to be used as a
@@ -231,9 +307,17 @@ static struct file_instance_block *file_instance_clone_instance(struct file_set_
 	new->executable.size = 0;
 	new->executable.timestamp = 0;
 	new->window_object = template->window_object;
+	new->tests = NULL;
+	new->test_space = FILE_INSTANCE_ALLOCATION_UNIT;
+	new->test_count = 0;
 	new->log = NULL;
 
 	new->name = template->name;
+
+	if (!flexutils_allocate((void **) &(new->tests), sizeof(struct test_instance_block), new->test_space)) {
+		heap_free(new);
+		return NULL;
+	}
 
 	new->next = suite_store_file_instance(template->parent, new);
 
@@ -268,6 +352,8 @@ struct file_instance_block *file_instance_delete_instance(struct file_instance_b
 	if (instance->log != NULL)
 		log_delete_instance(instance->log);
 
+	flexutils_free((void **) &(instance->tests));
+
 	heap_free(instance);
 
 	debug_printf("File instance deleted: 0x%x", instance);
@@ -291,7 +377,7 @@ void file_instance_add_to_window(struct file_instance_block *instance, struct wi
 	instance->window_object = window_add_new_fold(
 			window,
 			instance->window_object,
-			(instance->source.name == TEXTDUMP_NULL) ? 0 : 5	// TODO - This is a stub.
+			instance->test_count
 	);
 }
 
@@ -301,18 +387,29 @@ void file_instance_add_to_window(struct file_instance_block *instance, struct wi
  *
  * \param *instance	Pointer to the instance of interest.
  * \param *set		Pointer to the file set instance requesting the details.
+ * \param test		The index of the test of interest, or -1 for the file.
  * \param *details	Pointer to a struct in which the details should be
  *			returned.
  * \return		TRUE if valid details were returned; else FALSE.
  */
 
-osbool file_instance_get_line_details(struct file_instance_block *instance, struct file_set_block *set, struct file_instance_line_details *details)
+osbool file_instance_get_line_details(struct file_instance_block *instance, struct file_set_block *set, int test,
+		struct file_instance_line_details *details)
 {
 	if (instance == NULL || details == NULL)
 		return FALSE;
 
-	details->name = instance->name;
-	details->status = instance->status;
+	if (test < 0) {
+		details->name = instance->name;
+		details->status = instance->status;
+		details->total = instance->test_count;
+		details->count = instance->summary_passes; // TODO -- This probably needs to be done correctly!
+	} else if (test < instance->test_count) {
+		if (test_instance_get_line_details(&(instance->tests[test]), details) == FALSE)
+			return FALSE;
+	} else {
+		return FALSE;
+	}
 	details->is_new = (instance->initial == set) ? TRUE : FALSE;
 
 	return TRUE;
@@ -625,7 +722,7 @@ osbool file_instance_validate_files(struct file_instance_block *instance, struct
 	switch (instance->status) {
 	case FILE_INSTANCE_STATUS_UNKNOWN:
 		if (instance->source.name != TEXTDUMP_NULL && instance->executable.name != TEXTDUMP_NULL)
-			instance->status = FILE_INSTANCE_STATUS_READY_TO_RUN;
+			instance->status = FILE_INSTANCE_STATUS_READY_TO_SCAN;
 		else if (instance->source.name == TEXTDUMP_NULL && instance->executable.name == TEXTDUMP_NULL)
 			instance->status = FILE_INSTANCE_STATUS_ERROR_NO_FILES;
 		else if (instance->source.name == TEXTDUMP_NULL)
@@ -644,6 +741,125 @@ osbool file_instance_validate_files(struct file_instance_block *instance, struct
 }
 
 /**
+ * Scan the source file associated with a file instance, so that the tests
+ * defined within it can be added to the file instance.
+ *
+ * This calls the source scan functions provided by the project type associated
+ * with the parent test suite.
+ *
+ * \param *instance	Pointer to the file instance to be scanned.
+ */
+
+void file_instance_scan_source(struct file_instance_block *instance)
+{
+	if (instance == NULL || instance->status != FILE_INSTANCE_STATUS_READY_TO_SCAN)
+		return;
+
+	struct project_source_callbacks callbacks = {
+		.owner = instance,
+		.found_definition = file_instance_found_definition,
+		.found_call = file_instance_found_call
+	};
+
+	struct project_details *project = suite_get_project_details(instance->parent);
+	if (project == NULL || project->source_decoder == NULL) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_SOURCE;
+		return;
+	}
+
+	/* Get the filename of the source. */
+
+	char filename[FILE_INSTANCE_NAME_LEN];
+	if (!suite_read_folder_path(instance->parent, filename, FILE_INSTANCE_NAME_LEN,
+			SUITE_FOLDER_SOURCE, instance->source.name)) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_SOURCE;
+		return;
+	}
+
+	/* Scan the file. */
+
+	FILE *fh = fopen(filename, "r");
+	if (fh == NULL) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_SOURCE;
+		return;
+	}
+
+	if (project->source_decoder(fh, &callbacks) == TRUE)
+		instance->status = FILE_INSTANCE_STATUS_READY_TO_RUN;
+	else
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_SOURCE;
+
+	fclose(fh);
+}
+
+/**
+ * Handle callbacks from the project source scanner, reporting that a test
+ * function definition has been identified.
+ *
+ * \param *instance	Pointer to the associated file instance.
+ * \param *name		Pointer to the name of the identified test function.
+ * \param line		The line number from the source file at which the
+ *			definition was located, or -1 if this isn't known.
+ */
+
+static void file_instance_found_definition(struct file_instance_block *instance, char *name, int line)
+{
+	if (instance == NULL || name == NULL)
+		return;
+
+	debug_printf("We've found a definition of %s at line %d", name, line);
+
+	/* Find the test or create a new one. */
+
+	unsigned test = file_instance_find_test(instance, name);
+
+	if (test == FILE_INSTANCE_NOT_FOUND) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_TESTS;
+		return;
+	}
+
+	if (test_instance_add_location(&(instance->tests[test]), TEST_INSTANCE_LOCATION_DEFINITION, -1) == FALSE)
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_TESTS;
+
+	debug_printf("This has become test %u in the file.", test);
+}
+
+/**
+ * Handle callbacks from the project source scanner, reporting that a test
+ * function call has been identified.
+ *
+ * If the project doesn't have separate definitions and calls, a parser may call
+ * this immediately after calling file_instance_found_definition().
+ *
+ * \param *instance	Pointer to the associated file instance.
+ * \param *name		Pointer to the name of the identified test function.
+ * \param line		The line number from the source file at which the
+ *			call was located, or -1 if this isn't known.
+ */
+
+static void file_instance_found_call(struct file_instance_block *instance, char *name, int line)
+{
+	if (instance == NULL || name == NULL)
+		return;
+
+	debug_printf("We've found a call to %s at line %d", name, line);
+
+	/* Find the test or create a new one. */
+
+	unsigned test = file_instance_find_test(instance, name);
+
+	if (test == FILE_INSTANCE_NOT_FOUND) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_TESTS;
+		return;
+	}
+
+	if (test_instance_add_location(&(instance->tests[test]), TEST_INSTANCE_LOCATION_CALL, -1) == FALSE)
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_TESTS;
+
+	debug_printf("This has become test %u in the file.", test);
+}
+
+/**
  * Attempt to queue a file instance for execution.
  *
  * \param *instance	Pointer to the file instance to be executed.
@@ -656,26 +872,27 @@ void file_instance_execute(struct file_instance_block *instance)
 
 	/* Check that we have a file to run. */
 
-	if (instance->executable.name == TEXTDUMP_NULL)
+	if (instance->executable.name == TEXTDUMP_NULL) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_QUEUE;
 		return;
+	}
 
-	/* Get the folder path. */
+	/* Get the filename of the executable. */
 
-	char folder[FILE_INSTANCE_NAME_LEN];
-	if (!suite_read_folder_path(instance->parent, folder, FILE_INSTANCE_NAME_LEN, SUITE_FOLDER_EXECUTABLE))
+	char filename[FILE_INSTANCE_NAME_LEN];
+	if (!suite_read_folder_path(instance->parent, filename, FILE_INSTANCE_NAME_LEN,
+			SUITE_FOLDER_EXECUTABLE, instance->executable.name)) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_QUEUE;
 		return;
+	}
 
 	/* Write the command. */
-
-	char *text_base = suite_get_textdump_base(instance->parent);
-	if (text_base == NULL)
-		return;
 
 	char command[FILE_INSTANCE_COMMAND_LEN];
 
 	// TODO -- The command probably should come from the suite type.
 
-	string_printf(command, FILE_INSTANCE_COMMAND_LEN, "Run %s.%s", folder, text_base + instance->executable.name);
+	string_printf(command, FILE_INSTANCE_COMMAND_LEN, "Run %s", filename);
 
 	if (runner_add_task(command, instance))
 		instance->status = FILE_INSTANCE_STATUS_IN_QUEUE;
@@ -744,134 +961,214 @@ void file_instance_execution_finished(struct file_instance_block *instance)
 	if (instance == NULL)
 		return;
 
-	if (instance->log != NULL)
+	if (instance->log != NULL) {
+		instance->status = FILE_INSTANCE_STATUS_EXECUTED;
+
 		log_finish_text(instance->log);
+		file_instance_scan_log(instance);
+	} else {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_NO_OUTPUT;
+	}
 }
 
 /**
- * TODO
+ * Scan the log associated with a file instance, so that the test results
+ * contained within it can be added to the file instance.
+ *
+ * This calls the log scan functions provided by the project type associated
+ * with the parent test suite.
+ *
+ * \param *instance	Pointer to the file instance to be scanned.
  */
 
-static osbool file_instance_scan_source(char *filename)
+static void file_instance_scan_log(struct file_instance_block *instance)
 {
-	FILE *fh = fopen(filename, "r");
-	if (fh == NULL)
-		return FALSE;
+	if (instance == NULL || instance->status != FILE_INSTANCE_STATUS_EXECUTED)
+		return;
 
-	osbool result = file_instance_scan_block(fh, 0);
+	struct project_log_callbacks callbacks = {
+		.owner = instance,
+		.found_test_result = file_instance_found_test_result,
+		.found_summary = file_instance_found_summary,
+		.found_overall_result = file_instance_found_overall_result
+	};
 
-	fclose(fh);
-
-	return result;
-}
-
-/**
- * TODO
- */
-
-static osbool file_instance_scan_block(FILE *fh, int level)
-{
-	if (fh == NULL)
-		return FALSE;
-
-	int c;
-
-	/* Step past any leading white space. */
-
-	while ((c = fgetc(fh)) != EOF && isspace(c));
-	if (c == EOF)
-		return TRUE;
-
-	fseek(fh, -1, SEEK_CUR);
-
-	/* Scan for text that we're interested in. */
-
-	char *definition = "void ";
-	char *call = "RUN_TEST(";
-
-	char *test_definition = definition, *test_call = call;
-
-	while ((c = fgetc(fh)) != EOF && c != '}') {
-		if (level == 1 && test_definition == definition && *test_call == c) {
-			/* We're matching a call line. */
-			test_call++;
-			if (*test_call == '\0')
-				file_instance_found_call(fh);
-		} else if (level == 0 && test_call == call && *test_definition == c) {
-			/* We're matching a function definition line. */
-			test_definition++;
-			if (*test_definition == '\0')
-				file_instance_found_definition(fh);
-		} else if (c == '{') {
-			/* We've moved into a new block. */
-			file_instance_scan_block(fh, level + 1);
-			test_definition = definition;
-			test_call = call;
-		} else if (c == ';') {
-			/* The end of the current statement. */
-			test_definition = definition;
-			test_call = call;
-
-			/* Skip past leading whitespace. */
-			while ((c = fgetc(fh)) != EOF && isspace(c));
-			if (c == EOF)
-				break;
-
-			fseek(fh, -1, SEEK_CUR);
-		} else {
-			/* All matches failed, so reset the searches. */
-			test_definition = definition;
-			test_call = call;
-		}
+	struct project_details *project = suite_get_project_details(instance->parent);
+	if (project == NULL || project->log_decoder == NULL) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_LOG;
+		return;
 	}
 
-	return TRUE;
+	/* Scan the log. */
+
+	if (project->log_decoder(instance->log, &callbacks) == TRUE)
+		instance->status = FILE_INSTANCE_STATUS_READY_TO_REPORT;
+	else
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_LOG;
 }
 
 /**
- * TODO
+ * Handle callbacks from the project log scanner, reporting that a test result
+ * has been identified.
+ *
+ * \param *instance	Pointer to the associated file instance.
+ * \param *name		Pointer to the name of the identified test function.
+ * \param line		The line number from the source file at which the
+ *			test was identified in the log, or -1 if this isn't
+ *			known.
+ * \param outcome	The outcome reported for the test.
  */
 
-static osbool file_instance_found_definition(FILE *fh)
+static void file_instance_found_test_result(struct file_instance_block *instance, char *name, int line, enum project_outcome outcome)
 {
-	char buffer[256], *b = buffer;
+	if (instance == NULL || name == NULL)
+		return;
 
-	int c = '\0';
+	debug_printf("Found test result: name=%s, line=%d, outcome=%d", name, line, outcome);
 
-	while ((c = fgetc(fh)) && c != '(' && c != ';')
-		if (b < buffer + 255)
-			*b++ = c;
+	/* Find the test or create a new one. */
 
-	*b = '\0';
+	unsigned test = file_instance_find_test(instance, name);
 
-	if (c == ';')
-		fseek(fh, -1, SEEK_CUR);
-	else if (c == '(' && strcmp(buffer, "main") && strcmp(buffer, "setUp") && strcmp(buffer, "tearDown"))
-		debug_printf("Found definition '%s'", buffer);
+	if (test == FILE_INSTANCE_NOT_FOUND) {
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_TESTS;
+		return;
+	}
 
-	return (c == '(') ? TRUE : FALSE;
+	if (test_instance_add_location(&(instance->tests[test]), TEST_INSTANCE_LOCATION_RESULT, line) == FALSE)
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_TESTS;
+
+	enum test_instance_status status = TEST_INSTANCE_STATUS_UNKNOWN;
+
+	switch (outcome) {
+	case PROJECT_OUTCOME_PASS:
+		status = TEST_INSTANCE_STATUS_PASSED;
+		break;
+	case PROJECT_OUTCOME_FAIL:
+		status = TEST_INSTANCE_STATUS_FAILED;
+		break;
+	case PROJECT_OUTCOME_SKIP:
+		status = TEST_INSTANCE_STATUS_SKIPPED;
+		break;
+	default:
+		status = TEST_INSTANCE_STATUS_UNKNOWN;
+		break;
+	}
+
+	if (test_instance_update_status(&(instance->tests[test]), status) == FALSE)
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_TESTS;
+
+	debug_printf("This has become test %u in the file.", test);
 }
 
 /**
- * TODO
+ * Handle callbacks from the project log scanner, reporting that a summary of
+ * a file's results has been identified.
+ *
+ * \param *instance	Pointer to the associated file instance.
+ * \param tests		The total number of tests reported.
+ * \param passed	The number of tests reported as having passed.
+ * \param failed	The number of tests reported as having failed.
+ * \param skipped	The number of tests reported as having been skipped.
  */
 
-static osbool file_instance_found_call(FILE *fh)
+static void file_instance_found_summary(struct file_instance_block *instance, int tests, int passed, int failed, int skipped)
 {
-	char buffer[256], *b = buffer;
+	if (instance == NULL)
+		return;
 
-	int c = '\0';
+	debug_printf("Found summary: pass=%d, fail=%d, skip=%d, total=%d", passed, failed, skipped, tests);
 
-	while ((c = fgetc(fh)) && c != ')' && c != ';')
-		if (b < buffer + 255)
-			*b++ = c;
+	instance->summary_passes = passed;
+	instance->summary_fails = failed;
+	instance->summary_skipped = skipped;
+	instance->summary_total = tests;
+}
 
-	*b = '\0';
+/**
+ * Handle callbacks from the project log scanner, reporting that an overall
+ * file result has been identified
+ *
+ * \param *instance	Pointer to the associated file instance.
+ * \param outcome	The outcome reported for the test file.
+ */
 
-	if (c == ';')
-		fseek(fh, -1, SEEK_CUR);
-	else if (c == ')')
-		debug_printf("Found call '%s'", buffer);
+static void file_instance_found_overall_result(struct file_instance_block *instance, enum project_outcome outcome)
+{
+	if (instance == NULL)
+		return;
 
-	return (c == ')') ? TRUE : FALSE;
+	debug_printf("Found overall result: %d", outcome);
+
+	instance->summary_outcome = outcome;
+}
+
+/**
+ * Given a test function name, locate a matching test within the file instance.
+ * This returns an index into the tests flex array. If no match was found, the
+ * returned index will contain a newly-created test record.
+ *
+ * \param *instance	Pointer to the file instance to be searched.
+ * \param *name		Pointer to the function name to be searched for.
+ * \return		The index of the record, or FILE_INSTANCE_NOT_FOUND if
+ *			for some reason no match could be found and no new
+ *			record could be created.
+ */
+
+static unsigned file_instance_find_test(struct file_instance_block *instance, char *name)
+{
+	if (instance == NULL || instance->tests == NULL)
+		return FILE_INSTANCE_NOT_FOUND;
+
+	for (unsigned i = 0; i < instance->test_count; i++) {
+		if (test_instance_compare_test(&(instance->tests[i]), instance->parent, name) == TRUE)
+			return i;
+	}
+
+	unsigned new = file_instance_add_test(instance);
+	if (new == FILE_INSTANCE_NOT_FOUND)
+		return FILE_INSTANCE_NOT_FOUND;
+
+	/* Store the name here, because if it shifts the flex heap that would
+	 * break the pointer to the test instance if we did it in the called
+	 * function!
+	 */
+
+	unsigned test_name = suite_store_text(instance->parent, name);
+
+	test_instance_populate_new_test(&(instance->tests[new]), test_name);
+
+	return new;
+}
+
+/**
+ * Add a new test instance record into the tests array of a file instance.
+ *
+ * \param *instance	Pointer to the file instance in which to create the
+ *			new test.
+ * \return		The index into the array of the new test, or
+ *			FILE_INSTANCE_NOT_FOUND if the operation failed.
+ */
+
+static unsigned file_instance_add_test(struct file_instance_block *instance)
+{
+	if (instance == NULL)
+		return FILE_INSTANCE_NOT_FOUND;
+
+	if (instance->test_count >= instance->test_space) {
+		debug_printf("We need more space...");
+		size_t new_space = instance->test_space;
+
+		while (new_space <= instance->test_count)
+			new_space += FILE_INSTANCE_ALLOCATION_UNIT;
+
+		if (flexutils_resize((void **) &(instance->tests), sizeof(struct test_instance_block), new_space))
+			instance->test_space = new_space;
+		debug_printf("Space increased to %u units", instance->test_space);
+	}
+
+	if (instance->test_count >= instance->test_space)
+		return FILE_INSTANCE_NOT_FOUND;
+
+	return instance->test_count++;
 }

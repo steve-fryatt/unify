@@ -85,7 +85,12 @@ struct log_instance {
 	/**
 	 * The number of lines contained in the log window.
 	 */
-	int line_count;
+	unsigned line_count;
+
+	/**
+	 * The number of lines read by log_read_line().
+	 */
+	unsigned read_count;
 
 	/**
 	 * A flex block containing the log line redraw data.
@@ -250,6 +255,7 @@ struct log_instance *log_create_instance(char *title)
 
 	instance->lines = NULL;
 	instance->line_count = 0;
+	instance->read_count = 0;
 
 	instance->allocation = LOG_ALLOCATION_UNIT;
 	instance->length = 0;
@@ -527,7 +533,7 @@ void log_finish_text(struct log_instance *instance)
 
 	/* Find line endings. */
 
-	int lines = (instance->length > 0) ? 1 : 0;
+	unsigned lines = (instance->length > 0) ? 1 : 0;
 
 	for (unsigned i = 0; i < (instance->length - 1); i++) {
 		if (instance->text[i] == '\r' && instance->text[i+1] == '\n') {
@@ -551,7 +557,7 @@ void log_finish_text(struct log_instance *instance)
 	instance->line_count = lines;
 
 	unsigned i = 0;
-	int line = 0;
+	unsigned line = 0;
 
 	while (i < instance->length && line < lines) {
 		instance->lines[line].offset = i;
@@ -665,7 +671,7 @@ osbool log_write_to_file(struct log_instance *instance, FILE *file)
 	if (instance == NULL || instance->lines == NULL || file == NULL)
 		return FALSE;
 
-	for (int line = 0; line < instance->line_count; line++) {
+	for (unsigned line = 0; line < instance->line_count; line++) {
 		if (fputs(instance->text + instance->lines[line].offset, file) == EOF || fputc('\n', file) == EOF)
 			return FALSE;
 	}
@@ -841,4 +847,48 @@ static os_error *log_paint_text(struct log_redraw *line_info, char *text, os_coo
 
 	return xfont_paint(font, text + line_info->offset, font_OS_UNITS | font_KERN | font_GIVEN_FONT,
 			pos->x, pos->y, NULL, NULL, 0);
+}
+
+/**
+ * Read a line from a log file. This should be called repeatedly until all
+ * of the available lines have been read.
+ *
+ * Lines can not be read until log_finish_text() has been called.
+ *
+ * \param *instance		Pointer to the log instance to be read.
+ * \return			A line index if a new line is available, or
+ *				LOG_NO_LINE otherwise.
+ */
+unsigned log_read_line(struct log_instance *instance)
+{
+	if (instance == NULL || instance->lines == NULL)
+		return LOG_NO_LINE;
+
+	if (instance->read_count >= instance->line_count)
+		return LOG_NO_LINE;
+
+	return instance->read_count++;
+}
+
+/**
+ * Obtain a pointer to a line of log text, given a log line returned by
+ * log_read_line().
+ *
+ * Note that these pointers are into a flex heap, so they should not be
+ * retained and used across any operation which might shift the heap.
+ *
+ * \param *instance		Pointer to the log instance to be read.
+ * \param line			The line index of interest.
+ * \return			Pointer to the line, or NULL.
+ */
+
+char *log_get_line_pointer(struct log_instance *instance, unsigned line)
+{
+	if (instance == NULL || instance->lines == NULL)
+		return NULL;
+
+	if (line >= instance->line_count)
+		return NULL;
+
+	return instance->text + instance->lines[line].offset;
 }

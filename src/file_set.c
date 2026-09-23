@@ -210,10 +210,12 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 		return previous;
 	}
 
-	/* Execute the new tests. */
+	/* Parse and execute the new tests. */
 
-	for (int i = 0; i < new->object_count; i++)
+	for (int i = 0; i < new->object_count; i++) {
+		file_instance_scan_source(new->objects[i]);
 		file_instance_execute(new->objects[i]);
+	}
 
 	return new;
 }
@@ -280,7 +282,7 @@ static unsigned file_set_add_object(struct file_set_block *instance, struct file
 }
 
 /**
- * Given a file set and a window instance, add the connetns of the file set
+ * Given a file set and a window instance, add the contents of the file set
  * to the window.
  *
  * \param *instance		Pointer to the file set to be added.
@@ -317,10 +319,7 @@ void file_set_add_to_window(struct file_set_block *instance, struct window_insta
 
 struct file_set_block *file_set_find_previous_object(struct file_set_block *instance)
 {
-	if (instance == NULL)
-		return NULL;
-
-	return instance->previous;
+	return (instance == NULL) ? NULL : instance->previous;
 }
 
 /**
@@ -351,12 +350,15 @@ struct file_set_block *file_set_find_next_object(struct file_set_block *instance
  *
  * \param *instance		Pointer to the file set instance of interest.
  * \param line			The line number from which to return details.
+ * \param entry			The entry within the line from which to return
+ *				details.
  * \param *details		Pointer to a structure in memory to hold the
  *				returned details.
  * \return			TRUE if successful; FALSE on error.
  */
 
-osbool file_set_get_line_details(struct file_set_block *instance, int line, struct file_instance_line_details *details)
+osbool file_set_get_line_details(struct file_set_block *instance, int line, int entry,
+		struct file_instance_line_details *details)
 {
 	if (instance == NULL || instance->objects == NULL)
 		return FALSE;
@@ -364,7 +366,7 @@ osbool file_set_get_line_details(struct file_set_block *instance, int line, stru
 	if (line < 0 || line >= instance->object_count)
 		return FALSE;
 
-	return file_instance_get_line_details(instance->objects[line], instance, details);
+	return file_instance_get_line_details(instance->objects[line], instance, entry, details);
 }
 
 /**
@@ -552,14 +554,16 @@ static void file_set_find_objects(struct file_set_block *instance, enum file_set
 
 	switch (type) {
 	case FILE_SET_TYPE_SOURCE:
-		suite_read_folder_path(instance->parent, folder, FILE_SET_MAX_PATH_LEN, SUITE_FOLDER_SOURCE);
+		suite_read_folder_path(instance->parent, folder, FILE_SET_MAX_PATH_LEN,
+				SUITE_FOLDER_SOURCE, TEXTDUMP_NULL);
 		pattern = "*/c";
 		suffix = "/c";
 		filetype = osfile_TYPE_TEXT;
 		break;
 
 	case FILE_SET_TYPE_EXECUTABLE:
-		suite_read_folder_path(instance->parent, folder, FILE_SET_MAX_PATH_LEN, SUITE_FOLDER_EXECUTABLE);
+		suite_read_folder_path(instance->parent, folder, FILE_SET_MAX_PATH_LEN,
+				SUITE_FOLDER_EXECUTABLE, TEXTDUMP_NULL);
 		filetype = osfile_TYPE_ABSOLUTE;
 		break;
 

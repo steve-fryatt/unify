@@ -41,18 +41,25 @@
 
 enum file_instance_status {
 	FILE_INSTANCE_STATUS_UNKNOWN,
-	FILE_INSTANCE_STATUS_READY_TO_RUN,		/**< Files OK, ready to run tests.		*/
-	FILE_INSTANCE_STATUS_IN_QUEUE,			/**< Moved from ready into execution queue.	*/
+	FILE_INSTANCE_STATUS_READY_TO_SCAN,			/**< Files OK, ready to scan source.		*/
+	FILE_INSTANCE_STATUS_READY_TO_RUN,			/**< Source scanned, ready to run tests.	*/
+	FILE_INSTANCE_STATUS_IN_QUEUE,				/**< Moved from ready into execution queue.	*/
+	FILE_INSTANCE_STATUS_EXECUTED,				/**< Execution is completed.			*/
+	FILE_INSTANCE_STATUS_READY_TO_REPORT,			/**< Log scanned, ready to report to the user.	*/
 	FILE_INSTANCE_STATUS_PASS,
 	FILE_INSTANCE_STATUS_FAIL,
-	FILE_INSTANCE_STATUS_ERROR_NO_FILES,		/**< Neither source nor executable found.	*/
-	FILE_INSTANCE_STATUS_ERROR_NO_SOURCE,		/**< Source file is missing, only executable.	*/
-	FILE_INSTANCE_STATUS_ERROR_NO_EXECUTABLE,	/**< Executable file is missing, only source.	*/
-	FILE_INSTANCE_STATUS_ERROR_DUPLICATE_SOURCE,	/**< There was already a source.		*/
-	FILE_INSTANCE_STATUS_ERROR_DUPLICATE_EXECUTABLE,/**< There was already an executable.		*/
-	FILE_INSTANCE_STATUS_ERROR_BAD_FILES,		/**< Can't work out the file state.		*/
-	FILE_INSTANCE_STATUS_ERROR_FAILED_TO_QUEUE,	/**< Job failed to be queued.			*/
-	FILE_INSTANCE_STATUS_ERROR_FALIED_TO_EXECUTE,	/**< TaskWindow failed to execute.		*/
+	FILE_INSTANCE_STATUS_ERROR_NO_FILES,			/**< Neither source nor executable found.	*/
+	FILE_INSTANCE_STATUS_ERROR_NO_SOURCE,			/**< Source file is missing, only executable.	*/
+	FILE_INSTANCE_STATUS_ERROR_NO_EXECUTABLE,		/**< Executable file is missing, only source.	*/
+	FILE_INSTANCE_STATUS_ERROR_DUPLICATE_SOURCE,		/**< There was already a source.		*/
+	FILE_INSTANCE_STATUS_ERROR_DUPLICATE_EXECUTABLE,	/**< There was already an executable.		*/
+	FILE_INSTANCE_STATUS_ERROR_BAD_FILES,			/**< Can't work out the file state.		*/
+	FILE_INSTANCE_STATUS_ERROR_BAD_TESTS,			/**< Can't work out the test state.		*/
+	FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_SOURCE,	/**< Failed to scan the source file.		*/
+	FILE_INSTANCE_STATUS_ERROR_FAILED_TO_QUEUE,		/**< Job failed to be queued.			*/
+	FILE_INSTANCE_STATUS_ERROR_FALIED_TO_EXECUTE,		/**< TaskWindow failed to execute.		*/
+	FILE_INSTANCE_STATUS_ERROR_NO_OUTPUT,			/**< No output was received from the tests.	*/
+	FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_LOG		/**< Failed to scan the log.			*/
 };
 
 /**
@@ -63,6 +70,8 @@ struct file_instance_line_details {
 	unsigned name;
 	enum file_instance_status status;
 	osbool is_new;
+	int count;
+	int total;
 };
 
 /**
@@ -133,12 +142,14 @@ void file_instance_add_to_window(struct file_instance_block *instance, struct wi
  *
  * \param *instance	Pointer to the instance of interest.
  * \param *set		Pointer to the file set instance requesting the details.
+ * \param test		The index of the test of interest, or -1 for the file.
  * \param *details	Pointer to a struct in which the details should be
  *			returned.
  * \return		TRUE if valid details were returned; else FALSE.
  */
 
-osbool file_instance_get_line_details(struct file_instance_block *instance, struct file_set_block *set, struct file_instance_line_details *details);
+osbool file_instance_get_line_details(struct file_instance_block *instance, struct file_set_block *set, int test,
+		struct file_instance_line_details *details);
 
 /**
  * Return details of a file instance.
@@ -247,6 +258,18 @@ struct file_instance_block *file_instance_add_executable_file(struct file_instan
  */
 
 osbool file_instance_validate_files(struct file_instance_block *instance, struct file_set_block *set);
+
+/**
+ * Scan the source file associated with a file instance, so that the tests
+ * defined within it can be added to the file instance.
+ *
+ * This calls the source scan functions provided by the project type associated
+ * with the parent test suite.
+ *
+ * \param *instance	Pointer to the file instance to be scanned.
+ */
+
+void file_instance_scan_source(struct file_instance_block *instance);
 
 /**
  * Attempt to queue a file instance for execution.

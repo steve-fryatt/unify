@@ -39,8 +39,11 @@ OBJS =  date_time.o	\
 	iconbar.o	\
 	log.o		\
 	main.o		\
+	project.o	\
 	runner.o	\
+	string_match.o	\
 	suite.o		\
+	test_instance.o	\
 	textdump.o	\
 	window.o
 
