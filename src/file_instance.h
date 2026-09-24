@@ -128,7 +128,7 @@ struct file_instance_block *file_instance_delete_instance(struct file_instance_b
 
 /**
  * Given a window instance, request that a file instance adds itself to the
- * windiow contents.
+ * window contents.
  *
  * \param *instance	Pointer to the instance to add.
  * \param *window	Pointer to the window instance to take the file.
