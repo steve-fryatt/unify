@@ -1227,10 +1227,60 @@ static void file_instance_generate_report(struct file_instance_block *instance)
 	if (instance == NULL || instance->status != FILE_INSTANCE_STATUS_READY_TO_REPORT)
 		return;
 
-	if (instance->summary_outcome == PROJECT_OUTCOME_PASS) // TODO - Do this properly!
+	/* Total up the test results. */
+
+	int tests = 0, passed = 0, failed = 0, skipped = 0, errors = 0;
+
+	for (int i = 0; i < instance->test_count; i++) {
+		enum test_instance_status status = test_instance_validate_test(&(instance->tests[i]));
+
+		switch (status) {
+		case TEST_INSTANCE_STATUS_PASSED:
+			passed++;
+			tests++;
+			break;
+		case TEST_INSTANCE_STATUS_FAILED:
+			failed++;
+			tests++;
+			break;
+		case TEST_INSTANCE_STATUS_SKIPPED:
+			skipped++;
+			tests++;
+			break;
+		default:
+			errors++;
+			break;
+		}
+	}
+
+	/* Work out what we think happened. */
+
+	enum project_outcome our_outcome = (tests == (passed + skipped) && failed == 0) ?
+			PROJECT_OUTCOME_PASS : PROJECT_OUTCOME_FAIL;
+
+	debug_printf("Our results: pass=%d, fail=%d, skip=%d, total=%d, outcome=%d, errors=%d",
+			passed, failed, skipped, tests, our_outcome, errors);
+
+	/* Now work out the final status. */
+
+	if (errors > 0)
+		instance->status = FILE_INSTANCE_STATUS_ERROR_FROM_TESTS;
+	else if (tests != instance->summary_total)
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_STAT_TOTAL;
+	else if (passed != instance->summary_passes)
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_STAT_PASS;
+	else if (failed != instance->summary_fails)
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_STAT_PASS;
+	else if (skipped != instance->summary_skipped)
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_STAT_PASS;
+	else if (our_outcome != instance->summary_outcome)
+		instance->status = FILE_INSTANCE_STATUS_ERROR_BAD_OUTCOME;
+	else if (our_outcome == PROJECT_OUTCOME_PASS)
 		instance->status = FILE_INSTANCE_STATUS_PASS;
 	else
 		instance->status = FILE_INSTANCE_STATUS_FAIL;
+
+	/* Update the window with the status. */
 
 	suite_update_window_fold(instance->parent, instance->window_object, instance->test_count);
 }

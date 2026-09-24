@@ -59,7 +59,18 @@ enum file_instance_status {
 	FILE_INSTANCE_STATUS_ERROR_FAILED_TO_QUEUE,		/**< Job failed to be queued.			*/
 	FILE_INSTANCE_STATUS_ERROR_FALIED_TO_EXECUTE,		/**< TaskWindow failed to execute.		*/
 	FILE_INSTANCE_STATUS_ERROR_NO_OUTPUT,			/**< No output was received from the tests.	*/
-	FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_LOG		/**< Failed to scan the log.			*/
+	FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_LOG,		/**< Failed to scan the log.			*/
+	FILE_INSTANCE_STATUS_ERROR_BAD_STAT_TOTAL,		/**< The reported total test count is bad.	*/
+	FILE_INSTANCE_STATUS_ERROR_BAD_STAT_PASS,		/**< The reported passed test count is bad.	*/
+	FILE_INSTANCE_STATUS_ERROR_BAD_STAT_FAIL,		/**< The reported failed test count is bad.	*/
+	FILE_INSTANCE_STATUS_ERROR_BAD_STAT_SKIP,		/**< The reported skipped test count is bad.	*/
+	FILE_INSTANCE_STATUS_ERROR_BAD_OUTCOME,			/**< The summary outcome doesn't agree with us.	*/
+	FILE_INSTANCE_STATUS_ERROR_FROM_TESTS,			/**< Some of the tests reported errors.		*/
+
+	/* The following statuses are for the benefit of tests within the file. */
+
+	FILE_INSTANCE_STATUS_TEST_ERROR,			/**< A test is reporting an error.		*/
+	FILE_INSTANCE_STATUS_TEST_SKIPPED			/**< A test was skipped.			*/
 };
 
 /**

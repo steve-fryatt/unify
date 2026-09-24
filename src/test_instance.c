@@ -82,6 +82,12 @@ osbool test_instance_get_line_details(struct test_instance_block *instance, stru
 	case TEST_INSTANCE_STATUS_FAILED:
 		details->status = FILE_INSTANCE_STATUS_FAIL;
 		break;
+	case TEST_INSTANCE_STATUS_SKIPPED:
+		details->status = FILE_INSTANCE_STATUS_TEST_SKIPPED;
+		break;
+	case TEST_INSTANCE_STATUS_ERROR:
+		details->status = FILE_INSTANCE_STATUS_TEST_ERROR;
+		break;
 	default:
 		details->status = FILE_INSTANCE_STATUS_UNKNOWN;
 		break;
@@ -158,6 +164,26 @@ osbool test_instance_update_status(struct test_instance_block *instance, enum te
 	instance->status = status;
 
 	return TRUE;
+}
+
+/**
+ * Validate a test at the end of execution, returning the status.
+ *
+ * \param *instance	Pointer to the test instance to be validated.
+ * \return		The status of the instance after validation.
+ */
+
+enum test_instance_status test_instance_validate_test(struct test_instance_block *instance)
+{
+	if (instance == NULL)
+		return TEST_INSTANCE_STATUS_UNKNOWN;
+
+	/* The test should have been seen at source, call and result. */
+
+	if (instance->location != TEST_INSTANCE_LOCATION_ALL)
+		instance->status = TEST_INSTANCE_STATUS_ERROR;
+
+	return instance->status;
 }
 
 /**

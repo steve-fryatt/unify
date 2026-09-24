@@ -42,7 +42,8 @@ enum test_instance_status {
 	TEST_INSTANCE_STATUS_UNKNOWN,
 	TEST_INSTANCE_STATUS_PASSED,
 	TEST_INSTANCE_STATUS_FAILED,
-	TEST_INSTANCE_STATUS_SKIPPED
+	TEST_INSTANCE_STATUS_SKIPPED,
+	TEST_INSTANCE_STATUS_ERROR
 };
 
 struct test_instance_block {
@@ -104,6 +105,15 @@ osbool test_instance_add_location(struct test_instance_block *instance, enum tes
  */
 
 osbool test_instance_update_status(struct test_instance_block *instance, enum test_instance_status status);
+
+/**
+ * Validate a test at the end of execution, returning the status.
+ *
+ * \param *instance	Pointer to the test instance to be validated.
+ * \return		The status of the instance after validation.
+ */
+
+enum test_instance_status test_instance_validate_test(struct test_instance_block *instance);
 
 /**
  * Compare a test with a name, to see if the two match.
