@@ -238,6 +238,18 @@ unsigned window_add_new_fold(struct window_instance *instance, unsigned id, int 
 
 void window_finish_new_content(struct window_instance *instance);
 
+/**
+ * Update the number of entries for a fold, and force a redraw.
+ *
+ * \param *instance		Pointer to the window instance being updated.
+ * \param id			A window object ID for the fold contents, if
+ *				one has previously be allocated.
+ * \param entries		The number of entries to be contained in the
+ *				fold.
+ */
+
+void window_update_fold(struct window_instance *instance, unsigned id, int entries);
+
 
 /**
  * Calculate the first row to be included in a redraw operation.

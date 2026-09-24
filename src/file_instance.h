@@ -260,26 +260,6 @@ struct file_instance_block *file_instance_add_executable_file(struct file_instan
 osbool file_instance_validate_files(struct file_instance_block *instance, struct file_set_block *set);
 
 /**
- * Scan the source file associated with a file instance, so that the tests
- * defined within it can be added to the file instance.
- *
- * This calls the source scan functions provided by the project type associated
- * with the parent test suite.
- *
- * \param *instance	Pointer to the file instance to be scanned.
- */
-
-void file_instance_scan_source(struct file_instance_block *instance);
-
-/**
- * Attempt to queue a file instance for execution.
- *
- * \param *instance	Pointer to the file instance to be executed.
- */
-
-void file_instance_execute(struct file_instance_block *instance);
-
-/**
  * Accept TaskWindow output from the runner and add it to the log for a
  * file instance. If a log doesn't exist, it will be created.
  *

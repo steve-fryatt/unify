@@ -418,6 +418,23 @@ osbool suite_read_folder_path(struct suite_block *instance, char *buffer, size_t
 }
 
 /**
+ * Update the number of entries for a fold in the suite window, and force a
+ * redraw.
+ *
+ * \param *instance		Pointer to the test suite being updated.
+ * \param id			A window object ID for the fold contents, if
+ *				one has previously be allocated.
+ * \param entries		The number of entries to be contained in the
+ *				fold.
+ */
+
+void suite_update_window_fold(struct suite_block *instance, unsigned id, int entries)
+{
+	if (instance != NULL || instance->window != NULL)
+		window_update_fold(instance->window, id, entries);
+}
+
+/**
  * Handle close events from an instance window.
  *
  * \param *data		Pointer to our client data, which should be a

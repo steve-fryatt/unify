@@ -210,13 +210,18 @@ struct file_instance_block {
 /* Static function prototypes. */
 
 static struct file_instance_block *file_instance_clone_instance(struct file_set_block *initial, struct file_instance_block *template, osbool use_source);
+static void file_instance_set_callback(struct file_instance_block *instance);
+static osbool file_instance_timer_callback(os_t time, void *data);
 static void file_instance_store_file(struct suite_block *parent, struct file_instance_details *details, osgbpb_info *entry);
+static void file_instance_scan_source(struct file_instance_block *instance);
 static void file_instance_found_definition(struct file_instance_block *instance, char *name, int line);
 static void file_instance_found_call(struct file_instance_block *instance, char *name, int line);
+static void file_instance_execute(struct file_instance_block *instance);
 static void file_instance_scan_log(struct file_instance_block *instance);
 static void file_instance_found_test_result(struct file_instance_block *instance, char *name, int line, enum project_outcome outcome);
 static void file_instance_found_summary(struct file_instance_block *instance, int tests, int passed, int failed, int skipped);
 static void file_instance_found_overall_result(struct file_instance_block *instance, enum project_outcome outcome);
+static void file_instance_generate_report(struct file_instance_block *instance);
 static unsigned file_instance_find_test(struct file_instance_block *instance, char *name);
 static unsigned file_instance_add_test(struct file_instance_block *instance);
 
@@ -347,6 +352,10 @@ struct file_instance_block *file_instance_delete_instance(struct file_instance_b
 
 	struct file_instance_block *next = instance->next;
 
+	/* Delete any timer callbacks which are pending for the instance. */
+
+	event_delete_callback_by_data(file_instance_timer_callback, instance);
+
 	/* Free the memory associated with the instance. */
 
 	if (instance->log != NULL)
@@ -359,6 +368,87 @@ struct file_instance_block *file_instance_delete_instance(struct file_instance_b
 	debug_printf("File instance deleted: 0x%x", instance);
 
 	return next;
+}
+
+/**
+ * Schedule a timer callback for a file instance. This will be for 10cs in the
+ * future, and will be used to continue processing the execution state machine.
+ *
+ * \param *instance	Pointer to the instance requesting a callback.
+ */
+
+static void file_instance_set_callback(struct file_instance_block *instance)
+{
+	if (instance == NULL)
+		return;
+
+	debug_printf("Callback %d set", instance->status);
+
+	event_add_single_callback(NULL, 10, file_instance_timer_callback, instance);
+}
+
+/**
+ * Timer callback handler for the execution state machine.
+ *
+ * \param time		The time that the callback event was triggered.
+ * \param *data		The client data, which is a pointer to the instance
+ *			which owns the event.
+ */
+
+static osbool file_instance_timer_callback(os_t time, void *data)
+{
+	struct file_instance_block *instance = data;
+	if (instance == NULL)
+		return FALSE;
+
+	debug_printf("Callback %d received at %d", instance->status, time);
+
+	switch (instance->status) {
+	case FILE_INSTANCE_STATUS_READY_TO_SCAN:
+		/* Called following file_instance_validate_files() if the file
+		 * is passed for processing, to queue the file instance for
+		 * source scanning.
+		 */
+
+		file_instance_scan_source(instance);
+		break;
+
+	case FILE_INSTANCE_STATUS_READY_TO_RUN:
+		/* Called following file_instance_scan_source(), to queue the
+		 * file instance for execution.
+		 */
+
+		file_instance_execute(instance);
+		break;
+
+	case FILE_INSTANCE_STATUS_EXECUTED:
+		/* Called following file_instance_execution_finished(), which in
+		 * turn is hanging off Message_TaskWindowMorio, to scan the log
+		 * data which has been returned from the completed task
+		 * execution.
+		 */
+
+		file_instance_scan_log(instance);
+		break;
+
+	case FILE_INSTANCE_STATUS_READY_TO_REPORT:
+		/* Called following file_instance_scan_log() has completed
+		 * successfully, to process the information collected from that
+		 * operation.
+		 */
+
+		file_instance_generate_report(instance);
+		break;
+
+	default:
+		/* This should never be reached, and suggests that we've queued
+		 * a callback from an invalid place in the process.
+		 */
+
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 /**
@@ -737,6 +827,11 @@ osbool file_instance_validate_files(struct file_instance_block *instance, struct
 		break;
 	}
 
+	/* If we're ready to go, pop the instance into the state machine. */
+
+	if (instance->status == FILE_INSTANCE_STATUS_READY_TO_SCAN)
+		file_instance_set_callback(instance);
+
 	return TRUE;
 }
 
@@ -747,10 +842,12 @@ osbool file_instance_validate_files(struct file_instance_block *instance, struct
  * This calls the source scan functions provided by the project type associated
  * with the parent test suite.
  *
+ * This is a state machine timer callback.
+ *
  * \param *instance	Pointer to the file instance to be scanned.
  */
 
-void file_instance_scan_source(struct file_instance_block *instance)
+static void file_instance_scan_source(struct file_instance_block *instance)
 {
 	if (instance == NULL || instance->status != FILE_INSTANCE_STATUS_READY_TO_SCAN)
 		return;
@@ -784,12 +881,16 @@ void file_instance_scan_source(struct file_instance_block *instance)
 		return;
 	}
 
-	if (project->source_decoder(fh, &callbacks) == TRUE)
+	if (project->source_decoder(fh, &callbacks) == TRUE) {
 		instance->status = FILE_INSTANCE_STATUS_READY_TO_RUN;
-	else
+		file_instance_set_callback(instance);
+	} else {
 		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_SOURCE;
+	}
 
 	fclose(fh);
+
+	suite_update_window_fold(instance->parent, instance->window_object, instance->test_count);
 }
 
 /**
@@ -862,10 +963,12 @@ static void file_instance_found_call(struct file_instance_block *instance, char 
 /**
  * Attempt to queue a file instance for execution.
  *
+ * This is a state machine timer callback.
+ *
  * \param *instance	Pointer to the file instance to be executed.
  */
 
-void file_instance_execute(struct file_instance_block *instance)
+static void file_instance_execute(struct file_instance_block *instance)
 {
 	if (instance == NULL || instance->status != FILE_INSTANCE_STATUS_READY_TO_RUN)
 		return;
@@ -965,7 +1068,7 @@ void file_instance_execution_finished(struct file_instance_block *instance)
 		instance->status = FILE_INSTANCE_STATUS_EXECUTED;
 
 		log_finish_text(instance->log);
-		file_instance_scan_log(instance);
+		file_instance_set_callback(instance);
 	} else {
 		instance->status = FILE_INSTANCE_STATUS_ERROR_NO_OUTPUT;
 	}
@@ -977,6 +1080,8 @@ void file_instance_execution_finished(struct file_instance_block *instance)
  *
  * This calls the log scan functions provided by the project type associated
  * with the parent test suite.
+ *
+ * This is a state machine timer callback.
  *
  * \param *instance	Pointer to the file instance to be scanned.
  */
@@ -1001,10 +1106,14 @@ static void file_instance_scan_log(struct file_instance_block *instance)
 
 	/* Scan the log. */
 
-	if (project->log_decoder(instance->log, &callbacks) == TRUE)
+	if (project->log_decoder(instance->log, &callbacks) == TRUE) {
 		instance->status = FILE_INSTANCE_STATUS_READY_TO_REPORT;
-	else
+		file_instance_set_callback(instance);
+	} else {
 		instance->status = FILE_INSTANCE_STATUS_ERROR_FAILED_TO_SCAN_LOG;
+	}
+
+	suite_update_window_fold(instance->parent, instance->window_object, instance->test_count);
 }
 
 /**
@@ -1101,6 +1210,29 @@ static void file_instance_found_overall_result(struct file_instance_block *insta
 	debug_printf("Found overall result: %d", outcome);
 
 	instance->summary_outcome = outcome;
+}
+
+/**
+ * Scan a test details in a file instance to validate the tests, total up the
+ * passes, fails and skips, and check that everything agrees with the details
+ * as reported by the executable.
+ *
+ * This is a state machine timer callback.
+ *
+ * \param *instance	Pointer to the file instance to be reported on.
+ */
+
+static void file_instance_generate_report(struct file_instance_block *instance)
+{
+	if (instance == NULL || instance->status != FILE_INSTANCE_STATUS_READY_TO_REPORT)
+		return;
+
+	if (instance->summary_outcome == PROJECT_OUTCOME_PASS) // TODO - Do this properly!
+		instance->status = FILE_INSTANCE_STATUS_PASS;
+	else
+		instance->status = FILE_INSTANCE_STATUS_FAIL;
+
+	suite_update_window_fold(instance->parent, instance->window_object, instance->test_count);
 }
 
 /**

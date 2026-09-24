@@ -1174,6 +1174,37 @@ void window_finish_new_content(struct window_instance *instance)
 }
 
 /**
+ * Update the number of entries for a fold, and force a redraw.
+ *
+ * \param *instance		Pointer to the window instance being updated.
+ * \param id			A window object ID for the fold contents, if
+ *				one has previously be allocated.
+ * \param entries		The number of entries to be contained in the
+ *				fold.
+ */
+
+void window_update_fold(struct window_instance *instance, unsigned id, int entries)
+{
+	if (instance == NULL || id >= instance->object_count)
+		return;
+
+	unsigned line = instance->known_objects[id].line;
+	if (line >= instance->display_lines || line == WINDOW_LINE_NONE)
+		return;
+
+	osbool redraw_all = (instance->active_folds[line].entries != entries) ? TRUE : FALSE;
+	instance->active_folds[line].entries = entries;
+
+	window_recalculate_display_lines(instance);
+	window_set_extent(instance);
+
+	if (redraw_all)
+		window_force_redraw_fold_to_end(instance, line);
+	else
+		window_force_redraw_fold(instance, line);
+}
+
+/**
  * Toggle the state of a fold within a window.
  *
  * \param *instance		Pointer to the window instance containing the
