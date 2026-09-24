@@ -185,7 +185,7 @@ osbool suite_create_instance(char *folder)
 
 	/* Set up the window for the suite. */
 
-	new->window = window_create_instance(&suite_window_definition, new);
+	new->window = window_create_instance(&suite_window_definition, folder, new);
 	if (new->window == NULL) {
 		suite_delete_instance(new);
 		return FALSE;

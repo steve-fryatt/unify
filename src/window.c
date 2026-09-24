@@ -209,6 +209,7 @@ struct window_instance {
 	int width;				/**< The window width in OS units.		*/
 
 	int display_lines;			/**< The number of items in the window.		*/
+	char *title;				/**< Pointer to the window title.		*/
 
 
 	char date_field[WINDOW_DATE_FIELD_LEN];	/**< Storage for the date field icon.		*/
@@ -336,12 +337,15 @@ void window_initialise(osspriteop_area *sprites)
 /**
  * Create a new window instance.
  *
+ * The window title will be copied into the instance workspace.
+ *
  * \param *definition		Pointer to the window definition.
+ * \param *title		Pointer to the window title.
  * \param *client_data		Pointer to the client data, or NULL for none.
  * \return			Pointer to the new instance, or NULL on failure.
  */
 
-struct window_instance *window_create_instance(struct window_definition *definition, void *client_data)
+struct window_instance *window_create_instance(struct window_definition *definition, char *title, void *client_data)
 {
 	if (definition == NULL)
 		return NULL;
@@ -356,6 +360,7 @@ struct window_instance *window_create_instance(struct window_definition *definit
 	instance->client_data = client_data;
 	instance->handle = NULL;
 	instance->pane_handle = NULL;
+	instance->title = NULL;
 	instance->width = 1200;
 	instance->pane_size = 0;
 
@@ -381,8 +386,18 @@ struct window_instance *window_create_instance(struct window_definition *definit
 		return NULL;
 	}
 
+	/* Allocate the window title. */
+
+	instance->title = heap_strdup(title);
+	if (instance->title == NULL) {
+		window_delete_instance(instance);
+		return NULL;
+	}
+
 	/* Create the new window. */
 
+	window_definition->title_data.indirected_text.text = instance->title;
+	window_definition->title_data.indirected_text.size = strlen(instance->title) + 1;
 	os_error *error = xwimp_create_window(window_definition, &(instance->handle));
 	if (error != NULL) {
 		error_report_os_error(error, wimp_ERROR_BOX_CANCEL_ICON);
@@ -473,6 +488,9 @@ void window_delete_instance(struct window_instance *instance)
 	}
 
 	/* Free the memory used. */
+
+	if (instance->title != NULL)
+		heap_free(instance->title);
 
 	flexutils_free((void **) &(instance->known_objects));
 	flexutils_free((void **) &(instance->active_folds));
