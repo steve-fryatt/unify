@@ -157,22 +157,6 @@ struct window_definition {
 	void (*callback_run)(osbool full, void *data);
 };
 
-#if 0
-/**
- * A line redraw data block.
- */
-
-struct window_redraw {
-	enum window_type type;		/**< The type of data on the line.		*/
-	os_colour colour;		/**< The colour of the text.			*/
-	osbool bold;			/**< Is the text bold?				*/
-	char *text;			/**< Pointer to the line text.			*/
-	unsigned value;			/**< The value for a value line.		*/
-	int index;			/**< The index for a value line.		*/
-	int bytes;			/**< The number of bytes for a value line.	*/
-};
-#endif
-
 /**
  * Initialise the text window.
  *
@@ -253,64 +237,5 @@ void window_finish_new_content(struct window_instance *instance);
  */
 
 void window_update_fold(struct window_instance *instance, unsigned id, int entries);
-
-
-/**
- * Calculate the first row to be included in a redraw operation.
- */
-
-//#define WINDOW_REDRAW_TOP(toolbar, y) (((y) - (toolbar)) / WINDOW_ROW_HEIGHT)
-
-/**
- * Calculate the last row to be included in a redraw operation.
- */
-
-//#define WINDOW_REDRAW_BASE(toolbar, y) (((y) - (toolbar) - 2) / WINDOW_ROW_HEIGHT)
-
-/**
- * Calculate the base of a row in a table view.
- */
-
-//#define WINDOW_ROW_BASE(toolbar, y) ((-((y) + 1) * WINDOW_ROW_HEIGHT) - (toolbar))
-
-/**
- * Calculate the top of a row in a table view.
- */
-
-//#define WINDOW_ROW_TOP(toolbar, y) ((-(y) * WINDOW_ROW_HEIGHT) - (toolbar) + WINDOW_ROW_GUTTER)
-
-/**
- * Calculate the base of an icon in a table view.
- */
-
-//#define WINDOW_ROW_Y0(toolbar, y) ((-(y) * WINDOW_ROW_HEIGHT) - (toolbar) - WINDOW_ROW_ICON_HEIGHT)
-
-/**
- * Calculate the top of an icon in a table view.
- */
-
-//#define WINDOW_ROW_Y1(toolbar, y) ((-(y) * WINDOW_ROW_HEIGHT) - (toolbar))
-
-/**
- * Calculate the raw row number based on a window mouse coordinate.
- */
-
-//#define WINDOW_ROW(toolbar, y) (((-(y)) - (toolbar)) / WINDOW_ROW_HEIGHT)
-
-/**
- * Caluclate the position within a row, given a window mouse coordinate.
- */
-
-//#define WINDOW_ROW_Y_POS(toolbar, y) (((-(y)) - (toolbar)) % WINDOW_ROW_HEIGHT)
-
-/* Return true or false if a ROW_Y_POS() value is above or below the icon
- * area of the row.
- */
-
-//#define WINDOW_ROW_BELOW(y) ((y) < WINDOW_ROW_GUTTER)
-//#define WINDOW_ROW_ABOVE(y) ((y) > WINDOW_ROW_HEIGHT)
-
-
-
 
 #endif

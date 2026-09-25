@@ -302,11 +302,6 @@ static osbool window_decode_click_data(struct window_instance *instance, os_coor
 static osbool window_get_rows_from_fold(struct window_instance *instance, int fold, int *top, int *bottom);
 static osbool window_get_fold_info_from_row(struct window_instance *instance, int row, int *fold_out, int *entry_out);
 
-//static void window_format_numeric_data(struct window_redraw *value, char *buffer, size_t length);
-//static os_error *window_find_fonts(void);
-//static void window_lose_fonts(void);
-//static os_error *window_paint_text(struct window_redraw *line_info, char *text, os_coord *pos);
-
 /**
  * Initialise the text window.
  *
@@ -763,12 +758,10 @@ static void window_redraw_handler(wimp_draw *redraw)
 	while (more) {
 		if (instance != NULL && instance->definition->callback_redraw != NULL) {
 			int top = ((oy - redraw->clip.y1) - instance->pane_size) / WINDOW_ROW_HEIGHT;
-	//		int top = WINDOW_REDRAW_TOP(instance->pane_size, oy - redraw->clip.y1);
 			if (top < 0)
 				top = 0;
 
 			int base = ((oy - redraw->clip.y0) - instance->pane_size) / WINDOW_ROW_HEIGHT;
-	//		int base = WINDOW_REDRAW_BASE(instance->pane_size, oy - redraw->clip.y0);
 			if (base >= instance->display_lines)
 				base = instance->display_lines - 1;
 
@@ -1729,133 +1722,3 @@ static osbool window_get_fold_info_from_row(struct window_instance *instance, in
 
 	return FALSE;
 }
-
-
-#if 0
-
-/**
- * Process data for redraw events on a text window instance.
- *
- * \param instance		The text window instance to be redrawn.
- * \param *redraw		Pointer to the redraw data block.
- * \param *plotter		Pointer to a line plotter function.
- * \param *data			A data pointer to be passed to the plotter.
- */
-
-void window_redraw(struct window_instance *instance, wimp_draw *redraw, osbool (*plotter)(int, struct window_redraw *, void *), void *data)
-{
-	int				top = 0, base = 0, ox = 0, oy = 0, y;
-	struct window_redraw		line_info;
-	char				buffer[WINDOW_LINE_BUFFER_LEN];
-	os_coord			pos;
-	osbool				more;
-
-	/* Perform the redraw. */
-
-	window_find_fonts();
-
-	more = wimp_redraw_window(redraw);
-
-	if (instance != NULL) {
-		ox = redraw->box.x0 - redraw->xscroll;
-		oy = redraw->box.y1 - redraw->yscroll;
-	}
-
-	pos.x = ox;
-
-	while (more) {
-		/* Calculate the top and bottom rows for redraw. */
-
-		if (instance != NULL) {
-			top = WINDOW_REDRAW_TOP(instance->pane_size, oy - redraw->clip.y1);
-			if (top < 0)
-				top = 0;
-
-			base = WINDOW_REDRAW_BASE(instance->pane_size, oy - redraw->clip.y0);
-		}
-
-		/* Redraw the data into the window. */
-
-		if (plotter != NULL) {
-			for (y = top; y <= base; y++) {
-				if (plotter(y, &line_info, data) == TRUE) {
-					pos.y = oy + WINDOW_ROW_Y0(instance->pane_size, y);
-
-					switch (line_info.type) {
-					case WINDOW_TYPE_NONE:
-						break;
-					case WINDOW_TYPE_VALUE:
-						window_format_numeric_data(&line_info, buffer, WINDOW_LINE_BUFFER_LEN);
-						window_paint_text(&line_info, buffer, &pos);
-						break;
-					case WINDOW_TYPE_TEXT:
-						window_paint_text(&line_info, line_info.text, &pos);
-						break;
-					}
-				}
-			}
-		}
-
-		more = wimp_get_rectangle(redraw);
-	}
-
-	window_lose_fonts();
-}
-
-
-
-
-/**
- * Format a piece of numeric data supplied as part of a redraw routine.
- *
- * \param *value		Pointer to the data to be formatted.
- * \param *buffer		Pointer to a buffer to take the result.
- * \param length		The length of the supplied buffer.
- */
-
-static void window_format_numeric_data(struct window_redraw *value, char *buffer, size_t length)
-{
-	char c0 = ' ', c1 = ' ', c2 = ' ', c3 = ' ', *separator = "", *caption = "";
-
-	if (buffer == NULL || length == 0)
-		return;
-
-	buffer[0] = '\0';
-
-	if (value == NULL)
-		return;
-
-	c0 = value->value & 0xff;
-	if (c0 < 32 || c0 >= 127)
-		c0 = '.';
-
-	if (value->bytes > 1) {
-		c1 = (value->value >> 8) & 0xff;
-		if (c1 < 32 || c1 >= 127)
-			c1 = '.';
-	}
-
-	if (value->bytes > 2) {
-		c2 = (value->value >> 16) & 0xff;
-		if (c2 < 32 || c2 >= 127)
-			c2 = '.';
-	}
-
-	if (value->bytes > 3) {
-		c3 = (value->value >> 24) & 0xff;
-		if (c3 < 32 || c3 >= 127)
-			c3 = '.';
-	}
-
-	if (value->text != NULL) {
-		separator = " <- ";
-		caption = value->text;
-	}
-
-	snprintf(buffer, length, "%10d : %08x : %c%c%c%c : %-10d%s%s", value->index,
-			value->value, c0, c1, c2, c3, value->value, separator, caption);
-}
-
-
-
-#endif
