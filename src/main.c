@@ -103,6 +103,7 @@ static void main_initialise(void);
 static osbool main_message_quit(wimp_message *message);
 static osbool main_message_prequit(wimp_message *message);
 
+#ifndef UNIT_TESTING
 
 /**
  * Main code entry point.
@@ -122,6 +123,7 @@ int main(void)
 	return 0;
 }
 
+#endif
 
 /**
  * Wimp Poll loop.

@@ -36,11 +36,15 @@
 extern wimp_t			main_task_handle;
 extern osbool			main_quit_flag;
 
+#ifndef UNIT_TESTING
+
 /**
  * Main code entry point.
  */
 
 int main (void);
+
+#endif
 
 /**
  * Check for unsaved data, and ask the user if they wish to discard the changes.
