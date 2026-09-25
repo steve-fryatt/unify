@@ -100,6 +100,18 @@
 #define WINDOW_DATE_FIELD_LEN 32
 
 /**
+ * The amount of space allocated for the toolbar status field.
+ */
+
+#define WINDOW_STATUS_FIELD_LEN 32
+
+/**
+ * The amount of space allocated for the toolbar status validation string.
+ */
+
+#define WINDOW_STATUS_VALIDATION_LEN 16
+
+/**
  * The size of a horizontal scroll step.
  */
 
@@ -166,6 +178,7 @@
 #define WINDOW_TOOLBAR_ICON_RUN ((wimp_i) 4)
 #define WINDOW_TOOLBAR_ICON_CONTRACT ((wimp_i) 5)
 #define WINDOW_TOOLBAR_ICON_EXPAND ((wimp_i) 6)
+#define WINDOW_TOOLBAR_ICON_STATUS ((wimp_i) 7)
 
 /**
  * The Window menu entries.
@@ -211,8 +224,20 @@ struct window_instance {
 	int display_lines;			/**< The number of items in the window.		*/
 	char *title;				/**< Pointer to the window title.		*/
 
+	/**
+	 * Storage for the date field icon.
+	 */
+	char date_field[WINDOW_DATE_FIELD_LEN];
 
-	char date_field[WINDOW_DATE_FIELD_LEN];	/**< Storage for the date field icon.		*/
+	/**
+	 * Storage for the status field icon.
+	 */
+	char status_field[WINDOW_STATUS_FIELD_LEN];
+
+	/**
+	 * Storage for the status field validation string.
+	 */
+	char status_validation[WINDOW_STATUS_VALIDATION_LEN];
 
 	struct window_object *known_objects;	/**< Array of window objects.			*/
 	int object_space;
@@ -407,6 +432,12 @@ struct window_instance *window_create_instance(struct window_definition *definit
 	instance->date_field[0] = '\0';
 	window_pane_definition->icons[WINDOW_TOOLBAR_ICON_DATE].data.indirected_text.text = instance->date_field;
 	window_pane_definition->icons[WINDOW_TOOLBAR_ICON_DATE].data.indirected_text.size = WINDOW_DATE_FIELD_LEN;
+
+	instance->status_field[0] = '\0';
+	string_copy(instance->status_validation, "Sunknown;NStatus", WINDOW_STATUS_VALIDATION_LEN);
+	window_pane_definition->icons[WINDOW_TOOLBAR_ICON_STATUS].data.indirected_text.text = instance->status_field;
+	window_pane_definition->icons[WINDOW_TOOLBAR_ICON_STATUS].data.indirected_text.size = WINDOW_STATUS_FIELD_LEN;
+	window_pane_definition->icons[WINDOW_TOOLBAR_ICON_STATUS].data.indirected_text.validation = instance->status_validation;
 
 	windows_place_as_toolbar(window_definition, window_pane_definition, instance->pane_size);
 
@@ -804,6 +835,9 @@ static void window_redraw_handler(wimp_draw *redraw)
 					case WINDOW_STATUS_PASS:
 						name_icon->data.indirected_text_and_sprite.validation = "Spass";
 						break;
+					case WINDOW_STATUS_SKIP:
+						name_icon->data.indirected_text_and_sprite.validation = "Sskip";
+						break;
 					case WINDOW_STATUS_UNKNOWN:
 						name_icon->data.indirected_text_and_sprite.validation = "Sunknown";
 						break;
@@ -1033,6 +1067,22 @@ static void window_position_toolbar_icons(wimp_open *open, struct window_instanc
 		window_rhs,
 		icon_state.icon.extent.y1
 	);
+
+	icon_state.i = WINDOW_TOOLBAR_ICON_STATUS;
+	error = xwimp_get_icon_state(&icon_state);
+	if (error != NULL)
+		return;
+
+	error = xwimp_resize_icon(
+		icon_state.w,
+		icon_state.i,
+		icon_state.icon.extent.x0,
+		icon_state.icon.extent.y0,
+		window_rhs,
+		icon_state.icon.extent.y1
+	);
+	if (error != NULL)
+		return;
 }
 
 /**
@@ -1047,9 +1097,12 @@ static void window_position_toolbar_icons(wimp_open *open, struct window_instanc
  * \param time			The timestamp of the new content.
  * \param relation		The relationship of the new data to any other
  *				content.
+ * \param *status		Pointer to a status field block if the window
+ *				data is complete, or NULL otherwise.
  */
 
-void window_start_new_content(struct window_instance *instance, uint64_t time, enum window_content_relation relation)
+void window_start_new_content(struct window_instance *instance, uint64_t time,
+		enum window_content_relation relation, struct window_status_field *status)
 {
 	if (instance == NULL)
 		return;
@@ -1078,6 +1131,8 @@ void window_start_new_content(struct window_instance *instance, uint64_t time, e
 
 	icons_set_shaded(instance->pane_handle, WINDOW_TOOLBAR_ICON_LATEST,
 			(relation & WINDOW_CONTENT_RELATION_FIRST) ? TRUE : FALSE);
+
+	window_update_status_field(instance, status);
 }
 
 /**
@@ -1182,6 +1237,46 @@ void window_finish_new_content(struct window_instance *instance)
 	windows_redraw(instance->handle);
 
 	debug_printf("Finish new window content.");
+}
+
+/**
+ * Update the window status field with stats from the test.
+ *
+ * \param *instancve		Pointer to the window instance to be updated.
+ * \param *status		Pointer to a status block if the data is
+ *				complete, or NULL to show "in progress".
+ */
+
+void window_update_status_field(struct window_instance *instance, struct window_status_field *status)
+{
+	if (instance == NULL)
+		return;
+
+	if (status == NULL) {
+		string_copy(instance->status_field, "Running tests...", WINDOW_STATUS_FIELD_LEN);
+		string_copy(instance->status_validation, "Sunknown", WINDOW_STATUS_VALIDATION_LEN);
+	} else if (status->errors > 0) {
+		string_printf(instance->status_field, WINDOW_STATUS_FIELD_LEN, "%d Errors", status->errors);
+		string_copy(instance->status_validation, "Serror", WINDOW_STATUS_VALIDATION_LEN);
+	} else if (status->failed > 0) {
+		string_printf(instance->status_field, WINDOW_STATUS_FIELD_LEN, "%d Failed", status->failed);
+		string_copy(instance->status_validation, "Sfail", WINDOW_STATUS_VALIDATION_LEN);
+	} else if (status->skipped > 0 && status->passed == 0) {
+		string_printf(instance->status_field, WINDOW_STATUS_FIELD_LEN, "%d Skipped", status->skipped);
+		string_copy(instance->status_validation, "Sskip", WINDOW_STATUS_VALIDATION_LEN);
+	} else if (status->skipped > 0) {
+		string_printf(instance->status_field, WINDOW_STATUS_FIELD_LEN, "%d Passed (%d Skipped)", status->passed, status->skipped);
+		string_copy(instance->status_validation, "Spass", WINDOW_STATUS_VALIDATION_LEN);
+	} else if (status->passed > 0) {
+		string_printf(instance->status_field, WINDOW_STATUS_FIELD_LEN, "%d Passed", status->passed);
+		string_copy(instance->status_validation, "Spass", WINDOW_STATUS_VALIDATION_LEN);
+	} else {
+		string_copy(instance->status_field, "No Results", WINDOW_STATUS_FIELD_LEN);
+		string_copy(instance->status_validation, "Sunknown", WINDOW_STATUS_VALIDATION_LEN);
+	}
+
+	if (instance->handle != NULL)
+		wimp_set_icon_state(instance->handle, WINDOW_TOOLBAR_ICON_STATUS, 0, 0);
 }
 
 /**

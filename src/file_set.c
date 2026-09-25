@@ -295,7 +295,7 @@ void file_set_add_to_window(struct file_set_block *instance, struct window_insta
 	if (suite_file_set_is_first(instance->parent, instance))
 		relation |= WINDOW_CONTENT_RELATION_FIRST;
 
-	window_start_new_content(window, instance->timestamp, relation);
+	window_start_new_content(window, instance->timestamp, relation, NULL);
 
 	for (int i = 0; i < instance->object_count; i++)
 		file_instance_add_to_window(instance->objects[i], window);

@@ -551,7 +551,7 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 		content->status = WINDOW_STATUS_FAIL;
 		break;
 	case FILE_INSTANCE_STATUS_TEST_SKIPPED:
-		content->status = WINDOW_STATUS_UNKNOWN; // TODO - Needs to be skipped!
+		content->status = WINDOW_STATUS_SKIP;
 		break;
 	case FILE_INSTANCE_STATUS_UNKNOWN:
 	case FILE_INSTANCE_STATUS_READY_TO_SCAN:

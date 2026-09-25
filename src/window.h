@@ -66,7 +66,8 @@ enum window_status {
 	WINDOW_STATUS_UNKNOWN,
 	WINDOW_STATUS_ERROR,
 	WINDOW_STATUS_FAIL,
-	WINDOW_STATUS_PASS
+	WINDOW_STATUS_PASS,
+	WINDOW_STATUS_SKIP
 };
 
 /**
@@ -94,11 +95,22 @@ enum window_content_relation {
  */
 
 struct window_line {
-	enum window_status status;		/**< The entry status.			*/
-	char *text;				/**< The text for the line.		*/
-	int count;				/**< The line count, for suite entries.	*/
-	int total;				/**< The line total, for suite entries.	*/
-	osbool faded;				/**< Should the line be shown faded?	*/
+	enum window_status status;	/**< The entry status.					*/
+	char *text;			/**< The text for the line.				*/
+	int count;			/**< The line count, for suite entries.			*/
+	int total;			/**< The line total, for suite entries.			*/
+	osbool faded;			/**< Should the line be shown faded?			*/
+};
+
+/**
+ * Data for updating the status field of the toolbar.
+ */
+
+struct window_status_field {
+	int passed;			/**< The number of tests which have passed.		*/
+	int failed;			/**< The number of tests which have failed.		*/
+	int skipped;			/**< The number of tests which have been skipped.	*/
+	int errors;			/**< The number of tests which are reporting errors.	*/
 };
 
 #include "file_dialogue.h"
@@ -193,10 +205,12 @@ void window_delete_instance(struct window_instance *instance);
  * \param *instance		The instance to be updated.
  * \param time			The timestamp of the new content.
  * \param relation		The relationship of the new data to any other
- *				content.
+ * \param *status		Pointer to a status field block if the window
+ *				data is complete, or NULL otherwise.
  */
 
-void window_start_new_content(struct window_instance *instance, uint64_t time, enum window_content_relation relation);
+void window_start_new_content(struct window_instance *instance, uint64_t time,
+		enum window_content_relation relation, struct window_status_field *status);
 
 /**
  * Add a new fold to a window as part of a content update.
@@ -225,6 +239,16 @@ unsigned window_add_new_fold(struct window_instance *instance, unsigned id, int 
  */
 
 void window_finish_new_content(struct window_instance *instance);
+
+/**
+ * Update the window status field with stats from the test.
+ *
+ * \param *instancve		Pointer to the window instance to be updated.
+ * \param *status		Pointer to a status block if the data is
+ *				complete, or NULL to show "in progress".
+ */
+
+void window_update_status_field(struct window_instance *instance, struct window_status_field *status);
 
 /**
  * Update the number of entries for a fold, and force a redraw.
