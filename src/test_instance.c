@@ -107,8 +107,6 @@ void test_instance_populate_new_test(struct test_instance_block *instance, unsig
 	if (instance == NULL)
 		return;
 
-	debug_printf("Populating new test... %s", name);
-
 	instance->name = name;
 	instance->location = TEST_INSTANCE_LOCATION_NONE;
 	instance->status = TEST_INSTANCE_STATUS_UNKNOWN;
