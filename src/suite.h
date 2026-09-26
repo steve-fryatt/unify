@@ -158,13 +158,19 @@ osbool suite_read_folder_path(struct suite_block *instance, char *buffer, size_t
  * Update the number of entries for a fold in the suite window, and force a
  * redraw.
  *
+ * This should be called every time there's an update to a file set, to
+ * ensure that the window contents remain up to date.
+ *
  * \param *instance		Pointer to the test suite being updated.
+ * \param *set			Pointer to the file set that the update relates
+ *				to, which will be used to decide whether to
+ *				apply the update.
  * \param id			A window object ID for the fold contents, if
  *				one has previously be allocated.
  * \param entries		The number of entries to be contained in the
  *				fold.
  */
 
-void suite_update_window_fold(struct suite_block *instance, unsigned id, int entries);
+void suite_update_window_fold(struct suite_block *instance, struct file_set_block *set, unsigned id, int entries);
 
 #endif

@@ -194,7 +194,10 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 	file_set_find_objects(new, FILE_SET_TYPE_SOURCE, full);
 	file_set_find_objects(new, FILE_SET_TYPE_EXECUTABLE, full);
 
-	/* Do some initial validation on the files that we found. */
+	/* Do some initial validation on the files that we found. If any of the
+	 * files are updated, file_instance_validate_files() will add them to
+	 * its state machine for processing.
+	 */
 
 	osbool found_new_files = FALSE;
 

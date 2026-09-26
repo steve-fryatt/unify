@@ -141,6 +141,10 @@ struct file_instance_block *file_instance_delete_instance(struct file_instance_b
  * Given a window instance, request that a file instance adds itself to the
  * window contents.
  *
+ * This should *only* be called from file_set_add_to_window(), as part of
+ * an operation to create a new window context. It is therefore fine for us to
+ * assume that we are the active window context.
+ *
  * \param *instance	Pointer to the instance to add.
  * \param *window	Pointer to the window instance to take the file.
  */
