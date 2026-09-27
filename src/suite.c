@@ -503,12 +503,21 @@ osbool suite_read_folder_path(struct suite_block *instance, char *buffer, size_t
 
 void suite_update_window_fold(struct suite_block *instance, struct file_set_block *set, unsigned id, int entries)
 {
-	if (instance == NULL || instance->window == NULL || set != instance->current_file_set)
+	if (instance == NULL || instance->window == NULL)
+		return;
+
+	struct window_status_field *status = file_set_get_status(set);
+
+	/* We should always call file_set_get_status(), as this updates the
+	 * status of the file set so that it knows if it has finished --
+	 * even if it isn't currently on display.
+	 */
+
+	if (set != instance->current_file_set)
 		return;
 
 	window_update_fold(instance->window, id, entries);
 
-	struct window_status_field *status = file_set_get_status(set);
 	if (status != NULL) {
 		window_update_status_field(instance->window, status);
 		suite_unset_run_path_variable(instance);
