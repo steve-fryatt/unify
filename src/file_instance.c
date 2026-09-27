@@ -508,6 +508,7 @@ osbool file_instance_get_status(struct file_instance_block *instance, struct win
 	/* Update the status details if we can. */
 
 	if (status != NULL) {
+		status->total += instance->summary_total;
 		status->passed += instance->summary_passes;
 		status->failed += instance->summary_fails;
 		status->skipped += instance->summary_skipped;

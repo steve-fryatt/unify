@@ -111,6 +111,7 @@ struct window_status_field {
 	int failed;			/**< The number of tests which have failed.		*/
 	int skipped;			/**< The number of tests which have been skipped.	*/
 	int errors;			/**< The number of tests which are reporting errors.	*/
+	int total;			/**< The total number of tests recorded.		*/
 };
 
 #include "file_dialogue.h"

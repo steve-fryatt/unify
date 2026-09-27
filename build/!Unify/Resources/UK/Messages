@@ -34,20 +34,17 @@ BadSprites:Failed to locate suitable application sprites file.
 DefLogFile:Log
 DefLogsFile:Logs
 
-#LogMenu:Logs
+# Status Bar Messages
 
-#LogMessageSize:Message Size
-#LogSenderHandle:Sending Task Handle
-#LogMyRef:My Ref
-#LogYourRef:Your Ref
-#LogAction:Message Action
-#LogWindow:Window Handle
-#LogIcon:Icon Handle
-#LogXPos:X Coordinate
-#LogYPos:Y Coordinate
-#LogEstSize:Estimated Size
-#LogType:File Type
-#LogName:File Name
+StatRun:Running tests...
+StatErr:%1 Errors (%0 Tests)
+StatFail:%1 Failed (%0 Tests)
+StatPass:%1 Passed (%0 Tests)
+StatSkip:%1 Skipped (%0 Tests)
+StatPaSk:%1 Passed (%2 Skipped, %0 Tests)
+StatNone:No Results
+
+# Interactive Help
 
 Help.IconBar:\TUnify application, which can run and analyse unit test suites from Unity.|MDrag a test folder to the icon to load it.
 

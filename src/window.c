@@ -54,6 +54,7 @@
 #include <sflib/icons.h>
 #include <sflib/ihelp.h>
 #include <sflib/menus.h>
+#include <sflib/msgs.h>
 #include <sflib/saveas.h>
 #include <sflib/string.h>
 #include <sflib/templates.h>
@@ -1252,30 +1253,68 @@ void window_update_status_field(struct window_instance *instance, struct window_
 	if (instance == NULL)
 		return;
 
-	debug_printf("Updating window status field... status=0x%x", status);
+	/* The logic here:
+	 *
+	 *	Error	Fail	Pass	Skip
+	 *	X	x	x	x	"<n> Errors (<n> Tests)"
+	 *	X	x	x	-	"<n> Errors (<n> Tests)"
+	 *	X	x	-	x	"<n> Errors (<n> Tests)"
+	 *	X	x	-	-	"<n> Errors (<n> Tests)"
+	 *	X	-	x	x	"<n> Errors (<n> Tests)"
+	 *	X	-	x	-	"<n> Errors (<n> Tests)"
+	 *	X	-	-	x	"<n> Errors (<n> Tests)"
+	 *	X	-	-	-	"<n> Errors (<n> Tests)"
+	 *	-	X	x	x	"<n> Failed (<n> Tests)"
+	 *	-	X	x	-	"<n> Failed (<n> Tests)"
+	 *	-	X	-	x	"<n> Failed (<n> Tests)"
+	 *	-	X	-	-	"<n> Failed (<n> Tests)"
+	 *	-	-	X	X	"<n> Passed (<n> Skipped, <n> Tests)"
+	 *	-	-	X	-	"<n> Passed (<n> Tests)"
+	 *	-	-	-	X	"<n> Skipped (<n> Tests)"
+	 *	-	-	-	-	"No Results"
+	 *
+	 * If no status is passed in, "Running Tests..."
+	 */
+
+	/* Careful, now... status may legitimately be NULL here! */
+
+	char buf_total[10], buf1[10], buf2[10];
+	string_printf(buf_total, sizeof(buf_total), "%d", (status != NULL) ? status->total : 0);
+	*buf1 = '\0';
+	*buf2 = '\0';
+
+	/* Step through the logic described in the table above. */
 
 	if (status == NULL) {
-		string_copy(instance->status_field, "Running tests...", WINDOW_STATUS_FIELD_LEN);
+		msgs_lookup("StatRun", instance->status_field, WINDOW_STATUS_FIELD_LEN);
 		string_copy(instance->status_validation, "Sunknown", WINDOW_STATUS_VALIDATION_LEN);
 	} else if (status->errors > 0) {
-		string_printf(instance->status_field, WINDOW_STATUS_FIELD_LEN, "%d Errors", status->errors);
+		string_printf(buf1, sizeof(buf1), "%d", status->errors);
+		msgs_param_lookup("StatErr", instance->status_field, WINDOW_STATUS_FIELD_LEN, buf_total, buf1, NULL, NULL);
 		string_copy(instance->status_validation, "Serror", WINDOW_STATUS_VALIDATION_LEN);
 	} else if (status->failed > 0) {
-		string_printf(instance->status_field, WINDOW_STATUS_FIELD_LEN, "%d Failed", status->failed);
+		string_printf(buf1, sizeof(buf1), "%d", status->failed);
+		msgs_param_lookup("StatFail", instance->status_field, WINDOW_STATUS_FIELD_LEN, buf_total, buf1, NULL, NULL);
 		string_copy(instance->status_validation, "Sfail", WINDOW_STATUS_VALIDATION_LEN);
 	} else if (status->skipped > 0 && status->passed == 0) {
-		string_printf(instance->status_field, WINDOW_STATUS_FIELD_LEN, "%d Skipped", status->skipped);
+		string_printf(buf1, sizeof(buf1), "%d", status->skipped);
+		msgs_param_lookup("StatSkip", instance->status_field, WINDOW_STATUS_FIELD_LEN, buf_total, buf1, NULL, NULL);
 		string_copy(instance->status_validation, "Sskip", WINDOW_STATUS_VALIDATION_LEN);
 	} else if (status->skipped > 0) {
-		string_printf(instance->status_field, WINDOW_STATUS_FIELD_LEN, "%d Passed (%d Skipped)", status->passed, status->skipped);
+		string_printf(buf1, sizeof(buf1), "%d", status->passed);
+		string_printf(buf2, sizeof(buf2), "%d", status->skipped);
+		msgs_param_lookup("StatPaSk", instance->status_field, WINDOW_STATUS_FIELD_LEN, buf_total, buf1, buf2, NULL);
 		string_copy(instance->status_validation, "Spass", WINDOW_STATUS_VALIDATION_LEN);
 	} else if (status->passed > 0) {
-		string_printf(instance->status_field, WINDOW_STATUS_FIELD_LEN, "%d Passed", status->passed);
+		string_printf(buf1, sizeof(buf1), "%d", status->passed);
+		msgs_param_lookup("StatPass", instance->status_field, WINDOW_STATUS_FIELD_LEN, buf_total, buf1, NULL, NULL);
 		string_copy(instance->status_validation, "Spass", WINDOW_STATUS_VALIDATION_LEN);
 	} else {
-		string_copy(instance->status_field, "No Results", WINDOW_STATUS_FIELD_LEN);
+		msgs_lookup("StatNone", instance->status_field, WINDOW_STATUS_FIELD_LEN);
 		string_copy(instance->status_validation, "Sunknown", WINDOW_STATUS_VALIDATION_LEN);
 	}
+
+	/* Redraw the icon. */
 
 	if (instance->pane_handle != NULL)
 		wimp_set_icon_state(instance->pane_handle, WINDOW_TOOLBAR_ICON_STATUS, 0, 0);

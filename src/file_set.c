@@ -194,6 +194,7 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 	new->status_data.failed = 0;
 	new->status_data.skipped = 0;
 	new->status_data.errors = 0;
+	new->status_data.total = 0;
 
 	if (!flexutils_allocate((void **) &(new->objects), sizeof(struct file_instance_block *), new->object_space)) {
 		heap_free(new);
@@ -291,6 +292,7 @@ struct window_status_field *file_set_get_status(struct file_set_block *instance)
 	instance->status_data.failed = 0;
 	instance->status_data.skipped = 0;
 	instance->status_data.errors = 0;
+	instance->status_data.total = 0;
 
 	for (int i = 0; i < instance->object_count; i++) {
 		if (file_instance_get_status(instance->objects[i], &(instance->status_data)) == FALSE) {
