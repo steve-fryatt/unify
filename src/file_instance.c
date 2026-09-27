@@ -486,6 +486,41 @@ void file_instance_add_to_window(struct file_instance_block *instance, struct wi
 }
 
 /**
+ * Return details of a file instance's status.
+ *
+ * \param *instance	Pointer to the instance of interest.
+ * \param *status	Pointer to an object to be updated with the status
+ *			counts, or NULL if not required.
+ * \return		TRUE if the instance is complete, or FALSE if it is
+ *			still in flight.
+ */
+
+osbool file_instance_get_status(struct file_instance_block *instance, struct window_status_field *status)
+{
+	if (instance == NULL)
+		return FALSE;
+
+	/* We're still in flight, so return "not finished" and no data. */
+
+	if (FILE_INSTANCE_STATUS_IS_IN_FLIGHT(instance->status))
+		return FALSE;
+
+	/* Update the status details if we can. */
+
+	if (status != NULL) {
+		status->passed += instance->summary_passes;
+		status->failed += instance->summary_fails;
+		status->skipped += instance->summary_skipped;
+		if (FILE_INSTANCE_STATUS_IS_ERROR(instance->status))
+			status->errors++;
+	}
+
+	/* Return "finished". */
+
+	return TRUE;
+}
+
+/**
  * Return the details for required for redrawing a display line of a Test File
  * instance.
  *
@@ -689,7 +724,7 @@ struct file_instance_block *file_instance_add_source_file(struct file_instance_b
 	if (instance->initial == set) {
 		/* If there's already an error, bail out. */
 
-		if (instance->status != FILE_INSTANCE_STATUS_UNKNOWN)
+		if (FILE_INSTANCE_STATUS_IS_ERROR(instance->status))
 			return instance;
 
 		/* There shouldn't be a file already! */
@@ -746,7 +781,7 @@ struct file_instance_block *file_instance_add_executable_file(struct file_instan
 	if (instance->initial == set) {
 		/* If there's already an error, bail out. */
 
-		if (instance->status != FILE_INSTANCE_STATUS_UNKNOWN)
+		if (FILE_INSTANCE_STATUS_IS_ERROR(instance->status))
 			return instance;
 
 		/* There shouldn't be a file already! */

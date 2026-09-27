@@ -77,6 +77,18 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 struct file_set_block *file_set_delete_instance(struct file_set_block *instance);
 
 /**
+ * Recalculate (if required) and then return the status of a file set, with the
+ * data required to update the window toolbar's status field.
+ *
+ * \param *instance	Pointer to the file set instance of interest.
+ * \return		Pointer to a window_status_field struct if the file set
+ *			is complete, in a form suitable for passing to the
+ *			window for update. Otherwise, return NULL.
+ */
+
+struct window_status_field *file_set_get_status(struct file_set_block *instance);
+
+/**
  * Given a file set and a window instance, add the connetns of the file set
  * to the window.
  *

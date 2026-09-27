@@ -37,17 +37,29 @@
 
 /**
  * The status of a file instance.
+ *
+ * The codes have no sequential meaning, but are grouped by the top byte of
+ * their value so that we can do some basic
  */
 
 enum file_instance_status {
+	/* The following statuses are ungrouped, and stand alone. */
+	FILE_INSTANCE_STATUS_PASS,
+	FILE_INSTANCE_STATUS_FAIL,
+
+	/* The following statuses are treated as "in progress". */
+
+	FILE_INSTANCE_STATUS_IN_FLIGHT = 0x01000000u,
 	FILE_INSTANCE_STATUS_UNKNOWN,
 	FILE_INSTANCE_STATUS_READY_TO_SCAN,			/**< Files OK, ready to scan source.		*/
 	FILE_INSTANCE_STATUS_READY_TO_RUN,			/**< Source scanned, ready to run tests.	*/
 	FILE_INSTANCE_STATUS_IN_QUEUE,				/**< Moved from ready into execution queue.	*/
 	FILE_INSTANCE_STATUS_EXECUTED,				/**< Execution is completed.			*/
 	FILE_INSTANCE_STATUS_READY_TO_REPORT,			/**< Log scanned, ready to report to the user.	*/
-	FILE_INSTANCE_STATUS_PASS,
-	FILE_INSTANCE_STATUS_FAIL,
+
+	/* The following statuses are errors. */
+
+	FILE_INSTANCE_STATUS_ERROR = 0x02000000u,
 	FILE_INSTANCE_STATUS_ERROR_NO_FILES,			/**< Neither source nor executable found.	*/
 	FILE_INSTANCE_STATUS_ERROR_NO_SOURCE,			/**< Source file is missing, only executable.	*/
 	FILE_INSTANCE_STATUS_ERROR_NO_EXECUTABLE,		/**< Executable file is missing, only source.	*/
@@ -69,9 +81,26 @@ enum file_instance_status {
 
 	/* The following statuses are for the benefit of tests within the file. */
 
+	FILE_INSTANCE_STATUS_TEST = 0x03000000u,
 	FILE_INSTANCE_STATUS_TEST_ERROR,			/**< A test is reporting an error.		*/
-	FILE_INSTANCE_STATUS_TEST_SKIPPED			/**< A test was skipped.			*/
+	FILE_INSTANCE_STATUS_TEST_SKIPPED,			/**< A test was skipped.			*/
+
+	/* Mask out the group codes. */
+
+	FILE_INSTANCE_STATUS_MASK = 0xff000000u
 };
+
+/**
+ * Test whether a status is in flight.
+ */
+
+#define FILE_INSTANCE_STATUS_IS_IN_FLIGHT(status) (((status) & FILE_INSTANCE_STATUS_MASK) == FILE_INSTANCE_STATUS_IN_FLIGHT)
+
+/**
+ * Test whether a status is an error.
+ */
+
+#define FILE_INSTANCE_STATUS_IS_ERROR(status) (((status) & FILE_INSTANCE_STATUS_MASK) == FILE_INSTANCE_STATUS_ERROR)
 
 /**
  * Line redraw details for a file instance.
@@ -150,6 +179,18 @@ struct file_instance_block *file_instance_delete_instance(struct file_instance_b
  */
 
 void file_instance_add_to_window(struct file_instance_block *instance, struct window_instance *window);
+
+/**
+ * Return details of a file instance's status.
+ *
+ * \param *instance	Pointer to the instance of interest.
+ * \param *status	Pointer to an object to be updated with the status
+ *			counts, or NULL if not required.
+ * \return		TRUE if the instance is complete, or FALSE if it is
+ *			still in flight.
+ */
+
+osbool file_instance_get_status(struct file_instance_block *instance, struct window_status_field *status);
 
 /**
  * Return the details for required for redrawing a display line of a Test File

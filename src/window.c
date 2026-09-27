@@ -1252,6 +1252,8 @@ void window_update_status_field(struct window_instance *instance, struct window_
 	if (instance == NULL)
 		return;
 
+	debug_printf("Updating window status field... status=0x%x", status);
+
 	if (status == NULL) {
 		string_copy(instance->status_field, "Running tests...", WINDOW_STATUS_FIELD_LEN);
 		string_copy(instance->status_validation, "Sunknown", WINDOW_STATUS_VALIDATION_LEN);
@@ -1275,8 +1277,8 @@ void window_update_status_field(struct window_instance *instance, struct window_
 		string_copy(instance->status_validation, "Sunknown", WINDOW_STATUS_VALIDATION_LEN);
 	}
 
-	if (instance->handle != NULL)
-		wimp_set_icon_state(instance->handle, WINDOW_TOOLBAR_ICON_STATUS, 0, 0);
+	if (instance->pane_handle != NULL)
+		wimp_set_icon_state(instance->pane_handle, WINDOW_TOOLBAR_ICON_STATUS, 0, 0);
 }
 
 /**

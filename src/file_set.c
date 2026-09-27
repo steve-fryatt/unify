@@ -141,6 +141,16 @@ struct file_set_block {
 	 * The number of objects in the object list.
 	 */
 	size_t object_count;
+
+	/**
+	 * Have all of the tests within the set been executed?
+	 */
+	osbool is_completed;
+
+	/**
+	 * The status data for the window.
+	 */
+	struct window_status_field status_data;
 };
 
 /* Global variables. */
@@ -178,6 +188,12 @@ struct file_set_block *file_set_create_instance(struct suite_block *parent, stru
 	new->object_space = FILE_SET_ALLOCATION_UNIT;
 	new->object_count = 0;
 	new->timestamp = date_time_read_current_time();
+
+	new->is_completed = FALSE;
+	new->status_data.passed = 0;
+	new->status_data.failed = 0;
+	new->status_data.skipped = 0;
+	new->status_data.errors = 0;
 
 	if (!flexutils_allocate((void **) &(new->objects), sizeof(struct file_instance_block *), new->object_space)) {
 		heap_free(new);
@@ -246,6 +262,47 @@ struct file_set_block *file_set_delete_instance(struct file_set_block *instance)
 }
 
 /**
+ * Recalculate (if required) and then return the status of a file set, with the
+ * data required to update the window toolbar's status field.
+ *
+ * \param *instance	Pointer to the file set instance of interest.
+ * \return		Pointer to a window_status_field struct if the file set
+ *			is complete, in a form suitable for passing to the
+ *			window for update. Otherwise, return NULL.
+ */
+
+struct window_status_field *file_set_get_status(struct file_set_block *instance)
+{
+	if (instance == NULL || instance->objects == NULL)
+		return NULL;
+
+	/* There's nothing to do if we already know that we're complete. */
+
+	if (instance->is_completed == TRUE)
+		return &(instance->status_data);
+
+	/* Scan the file instances, checking to see if any haven't completed
+	 * and adding up the stats as we go.
+	 */
+
+	instance->is_completed = TRUE;
+
+	instance->status_data.passed = 0;
+	instance->status_data.failed = 0;
+	instance->status_data.skipped = 0;
+	instance->status_data.errors = 0;
+
+	for (int i = 0; i < instance->object_count; i++) {
+		if (file_instance_get_status(instance->objects[i], &(instance->status_data)) == FALSE) {
+			instance->is_completed = FALSE;
+			break;
+		}
+	}
+
+	return (instance->is_completed == TRUE) ? &(instance->status_data) : NULL;
+}
+
+/**
  * Add a file instance to the list of instances owned by a file set.
  *
  * \param *instance		Pointer to the file set instance to take
@@ -298,7 +355,8 @@ void file_set_add_to_window(struct file_set_block *instance, struct window_insta
 	if (suite_file_set_is_first(instance->parent, instance))
 		relation |= WINDOW_CONTENT_RELATION_FIRST;
 
-	window_start_new_content(window, instance->timestamp, relation, NULL);
+	window_start_new_content(window, instance->timestamp, relation,
+			(instance->is_completed) ? &(instance->status_data) : NULL);
 
 	for (int i = 0; i < instance->object_count; i++)
 		file_instance_add_to_window(instance->objects[i], window);
