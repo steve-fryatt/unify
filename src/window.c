@@ -1795,7 +1795,7 @@ static osbool window_get_rows_from_fold(struct window_instance *instance, int fo
 		*top = row;
 
 	if (bottom != NULL)
-		*bottom = row + (o->expanded == TRUE) ? f->entries : 0;
+		*bottom = row + ((o->expanded == TRUE) ? f->entries : 0);
 
 	return TRUE;
 }
