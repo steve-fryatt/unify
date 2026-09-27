@@ -296,7 +296,7 @@ static osbool project_unity_scan_log(struct log_instance *log, struct project_lo
 			continue;
 		if (!string_match_skip_forward_to(":", function_name, PROJECT_MAX_FUNCTION_LEN))
 			continue;
-		if (!string_match_find_option((char *[]) { "PASS", "FAIL", "IGNORE", NULL }, &result))
+		if (!string_match_find_option((char *[]) { "PASS", "FAIL", "IGNORE", "INFO", NULL }, &result))
 			continue;
 
 		enum project_outcome outcome = PROJECT_OUTCOME_UNKNOWN;
@@ -311,6 +311,9 @@ static osbool project_unity_scan_log(struct log_instance *log, struct project_lo
 		case 2:
 			outcome = PROJECT_OUTCOME_SKIP;
 			break;
+		case 3:
+			// This is an INFO line that we don't care about.
+			continue;
 		}
 
 		if (callbacks->found_test_result != NULL)
