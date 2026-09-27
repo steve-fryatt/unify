@@ -1318,6 +1318,10 @@ void window_update_status_field(struct window_instance *instance, struct window_
 
 	if (instance->pane_handle != NULL)
 		wimp_set_icon_state(instance->pane_handle, WINDOW_TOOLBAR_ICON_STATUS, 0, 0);
+
+	/* Shade the run button. */
+
+	icons_set_shaded(instance->pane_handle, WINDOW_TOOLBAR_ICON_RUN, (status == NULL) ? TRUE : FALSE);
 }
 
 /**
