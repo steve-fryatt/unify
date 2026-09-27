@@ -233,9 +233,10 @@ static osbool runner_start_task(struct runner_job *job, int slot)
 	char command[1024];
 
 	string_printf(command, sizeof(command),
-			"TaskWindow \"%s\" -wimpslot %dK -name \"Unit Test\" -quit -task &%08x -txt &%08x",
+			"TaskWindow \"%s\" -wimpslot %dK -name \"Unit Test #%d\" -quit -task &%08x -txt &%08x",
 			job->command,
 			runner_slot_size,
+			job->id,
 			runner_task_handle,
 			job->id
 	);
