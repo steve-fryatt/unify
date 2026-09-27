@@ -247,7 +247,11 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
 	new->initial = initial;
 	new->status = FILE_INSTANCE_STATUS_UNKNOWN;
 	new->source.name = TEXTDUMP_NULL;
+	new->source.size = 0;
+	new->source.timestamp = 0;
 	new->executable.name = TEXTDUMP_NULL;
+	new->executable.size = 0;
+	new->executable.timestamp = 0;
 	new->window_object = WINDOW_NULL_FOLD;
 	new->tests = NULL;
 	new->test_space = FILE_INSTANCE_ALLOCATION_UNIT;
@@ -799,6 +803,7 @@ struct file_instance_block *file_instance_add_executable_file(struct file_instan
 
 	if (instance->executable.name != TEXTDUMP_NULL) {
 		debug_printf("Testing the executable file details...");
+		debug_printf("Existing time: %" PRId64 " New time: %"PRId64, instance->executable.timestamp, timestamp);
 		if (instance->executable.size == entry->size && instance->executable.timestamp == timestamp)
 			return instance;
 
