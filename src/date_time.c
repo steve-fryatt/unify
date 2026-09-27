@@ -93,7 +93,7 @@ uint64_t date_time_read_osgbpb_timestamp(osgbpb_info *entry)
 	if ((entry->load_addr & 0xfff00000u) != 0xfff00000u)
 		return 0;
 
-	return ((uint64_t) entry->exec_addr) | ((uint64_t) (entry->load_addr & 0xffu) << 32);
+	return ((uint64_t) entry->exec_addr) | (((uint64_t) (entry->load_addr & 0xffu)) << 32);
 }
 
 /**
