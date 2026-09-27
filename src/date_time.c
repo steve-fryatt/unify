@@ -75,8 +75,6 @@ uint64_t date_time_read_current_time(void)
 			((uint64_t) utc.utc[3] << 24) |
 			((uint64_t) utc.utc[4] << 32);
 
-	debug_printf("Read time: %" PRId64, time);
-
 	return time;
 }
 
@@ -111,8 +109,6 @@ osbool date_time_write_standard_string(uint64_t time, char *buffer, size_t lengt
 {
 	if (buffer == NULL || length == 0)
 		return FALSE;
-
-	debug_printf("Print time: %" PRId64, time);
 
 	os_date_and_time os;
 

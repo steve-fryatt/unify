@@ -202,8 +202,6 @@ osbool test_instance_compare_test(struct test_instance_block *instance, struct s
 	if (textdump_base == NULL || instance->name == TEXTDUMP_NULL)
 		return FALSE;
 
-	debug_printf("Comparing against %s", textdump_base + instance->name);
-
 	if (strcmp(name, textdump_base + instance->name) == 0)
 		return TRUE;
 

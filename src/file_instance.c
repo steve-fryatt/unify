@@ -691,8 +691,6 @@ osbool file_instance_compare_object(struct file_instance_block *instance, char *
 	if (textdump_base == NULL || instance->name == TEXTDUMP_NULL)
 		return FALSE;
 
-	debug_printf("Comparing against %s", textdump_base + instance->name);
-
 	if (string_nocase_strcmp(clean_name, textdump_base + instance->name) == 0)
 		return TRUE;
 

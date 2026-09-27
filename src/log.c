@@ -545,8 +545,6 @@ void log_finish_text(struct log_instance *instance)
 		}
 	}
 
-	debug_printf("Found %d lines", lines);
-
 	/* Allocate space for the redraw data and populate it. */
 
 	if (!flexutils_allocate((void **) &(instance->lines), sizeof(struct log_redraw), lines)) {
@@ -578,8 +576,6 @@ void log_finish_text(struct log_instance *instance)
 			instance->text[i++] = '\0';
 		}
 	}
-
-	debug_printf("Ended with %d lines", line);
 
 	/* Close the log off to future updates. */
 

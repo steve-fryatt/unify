@@ -134,7 +134,7 @@ void runner_initialise(wimp_t task_handle)
 
 osbool runner_add_task(char *command, struct file_instance_block *owner)
 {
-	debug_printf("\\RExecuting %s", command);
+	debug_printf("\\LExecuting %s", command);
 
 	struct runner_job *new = heap_alloc(sizeof(struct runner_job));
 	if (new == NULL)
@@ -360,8 +360,6 @@ static osbool runner_task_window_output(wimp_message *message)
 		struct runner_job *job = runner_active_jobs[slot];
 		if (job == NULL || job->task_handle != message->sender)
 			continue;
-
-		debug_printf("Id %d has data", job->id);
 
 		file_instance_take_log_content(job->owner, data->data, data->data_size);
 		break;

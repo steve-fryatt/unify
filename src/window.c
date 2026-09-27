@@ -1599,8 +1599,6 @@ static osbool window_save_log(char *filename, osbool selection, void *data)
 	if (instance == NULL || filename == NULL || window_menu_fold == -1)
 		return FALSE;
 
-	debug_printf("Save log to %s", filename);
-
 	if (instance->definition->callback_save_log != NULL)
 		return instance->definition->callback_save_log(window_menu_fold, filename, instance->client_data);
 
@@ -1622,8 +1620,6 @@ static osbool window_save_logs(char *filename, osbool selection, void *data)
 	struct window_instance *instance = data;
 	if (instance == NULL || filename == NULL)
 		return FALSE;
-
-	debug_printf("Save logs to %s", filename);
 
 	if (instance->definition->callback_save_all_logs != NULL)
 		return instance->definition->callback_save_all_logs(filename, instance->client_data);
