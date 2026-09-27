@@ -635,6 +635,8 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 		content->status = WINDOW_STATUS_FAIL;
 	} else if (line_details.status == FILE_INSTANCE_STATUS_TEST_SKIPPED) {
 		content->status = WINDOW_STATUS_SKIP;
+	} else if (line_details.status == FILE_INSTANCE_STATUS_TEST_ERROR) {
+		content->status = WINDOW_STATUS_ERROR;
 	} else if (FILE_INSTANCE_STATUS_IS_ERROR(line_details.status)) {
 		content->status = WINDOW_STATUS_ERROR;
 	} else if (FILE_INSTANCE_STATUS_IS_IN_FLIGHT(line_details.status)) {
