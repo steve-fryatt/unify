@@ -421,17 +421,29 @@ osbool suite_read_folder_path(struct suite_block *instance, char *buffer, size_t
  * Update the number of entries for a fold in the suite window, and force a
  * redraw.
  *
+ * This should be called every time there's an update to a file set, to
+ * ensure that the window contents remain up to date.
+ *
  * \param *instance		Pointer to the test suite being updated.
+ * \param *set			Pointer to the file set that the update relates
+ *				to, which will be used to decide whether to
+ *				apply the update.
  * \param id			A window object ID for the fold contents, if
  *				one has previously be allocated.
  * \param entries		The number of entries to be contained in the
  *				fold.
  */
 
-void suite_update_window_fold(struct suite_block *instance, unsigned id, int entries)
+void suite_update_window_fold(struct suite_block *instance, struct file_set_block *set, unsigned id, int entries)
 {
-	if (instance != NULL || instance->window != NULL)
-		window_update_fold(instance->window, id, entries);
+	if (instance == NULL || instance->window == NULL || set != instance->current_file_set)
+		return;
+
+	window_update_fold(instance->window, id, entries);
+
+	struct window_status_field *status = file_set_get_status(set);
+	if (status != NULL)
+		window_update_status_field(instance->window, status);
 }
 
 /**
@@ -543,27 +555,18 @@ static osbool suite_redraw_line_handler(int fold, int entry, struct window_line 
 
 	/* Map the object status. */
 
-	switch (line_details.status) {
-	case FILE_INSTANCE_STATUS_PASS:
+	if (line_details.status == FILE_INSTANCE_STATUS_PASS) {
 		content->status = WINDOW_STATUS_PASS;
-		break;
-	case FILE_INSTANCE_STATUS_FAIL:
+	} else if (line_details.status == FILE_INSTANCE_STATUS_FAIL) {
 		content->status = WINDOW_STATUS_FAIL;
-		break;
-	case FILE_INSTANCE_STATUS_TEST_SKIPPED:
-		content->status = WINDOW_STATUS_UNKNOWN; // TODO - Needs to be skipped!
-		break;
-	case FILE_INSTANCE_STATUS_UNKNOWN:
-	case FILE_INSTANCE_STATUS_READY_TO_SCAN:
-	case FILE_INSTANCE_STATUS_READY_TO_RUN:
-	case FILE_INSTANCE_STATUS_IN_QUEUE:
-	case FILE_INSTANCE_STATUS_EXECUTED:
-	case FILE_INSTANCE_STATUS_READY_TO_REPORT:
-		content->status = WINDOW_STATUS_UNKNOWN;
-		break;
-	default:
+	} else if (line_details.status == FILE_INSTANCE_STATUS_TEST_SKIPPED) {
+		content->status = WINDOW_STATUS_SKIP;
+	} else if (FILE_INSTANCE_STATUS_IS_ERROR(line_details.status)) {
 		content->status = WINDOW_STATUS_ERROR;
-		break;
+	} else if (FILE_INSTANCE_STATUS_IS_IN_FLIGHT(line_details.status)) {
+		content->status = WINDOW_STATUS_UNKNOWN;
+	} else {
+		content->status = WINDOW_STATUS_UNKNOWN;
 	}
 
 	/* Handle the bits which vary between folds and entries. */
