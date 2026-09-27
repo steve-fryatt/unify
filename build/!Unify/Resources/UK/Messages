@@ -31,6 +31,9 @@ BadResource:Failed to locate suitable %0 file.
 BadTemplate:Window template '%0' not found.
 BadSprites:Failed to locate suitable application sprites file.
 
+ConfigTokens:Unexpected tokens encountered when reading Unify config file.
+ConfigBadMem:Invalid task memory value encountered when reading Unify config file.
+
 DefLogFile:Log
 DefLogsFile:Logs
 

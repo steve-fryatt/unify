@@ -31,14 +31,23 @@
 
 #include <string.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <limits.h>
+
 
 /* Acorn C header files */
 
 /* OSLib header files */
 
+#include <oslib/os.h>
+
 /* SF-Lib header files. */
 
+#include <sflib/config.h>
 #include <sflib/debug.h>
+#include <sflib/errors.h>
 #include <sflib/heap.h>
 #include <sflib/string.h>
 
@@ -52,19 +61,28 @@
 #include "textdump.h"
 #include "window.h"
 
-/**
- * The maximum length of the name of a test suite.
- */
-
-#define SUITE_NAME_LEN 64
-
 /* Structure definitions. */
 
 struct suite_block {
 	/**
 	 * The name of the test suite.
 	 */
-	char name[SUITE_NAME_LEN];
+	unsigned name;
+
+	/**
+	 * The name of the run path variable.
+	 */
+	unsigned run_path_variable;
+
+	/**
+	 * Did we set the run path variable at the start of the test?
+	 */
+	osbool we_set_run_path_variable;
+
+	/**
+	 * The memory allocation for tasks, in KB.
+	 */
+	int task_slot_size;
 
 	/**
 	 * Pointer to the details of the project contained in the suite.
@@ -129,6 +147,7 @@ struct suite_block *suite_list = NULL;
 
 /* Static function prototypes. */
 
+static void suite_start_test_run(struct suite_block *instance, osbool full);
 static void suite_close_handler(void *data);
 static void suite_navigation_handler(enum window_navigation_target target, void *data);
 static void suite_run_handler(osbool full, void *data);
@@ -138,6 +157,9 @@ static void suite_object_open_log(int fold, void *data);
 static osbool suite_object_save_log(int fold, char *filename, void *data);
 static osbool suite_object_save_all_logs(char *filename, void *data);
 static osbool suite_object_info_handler(int fold, struct file_dialogue_data *info, void *data);
+static osbool suite_read_config_file(struct suite_block *instance);
+static osbool suite_set_run_path_variable(struct suite_block *instance);
+static void suite_unset_run_path_variable(struct suite_block *instance);
 
 /* The Test Suite window definiton. */
 
@@ -174,6 +196,10 @@ osbool suite_create_instance(char *folder)
 	new->file_sets = NULL;
 	new->file_instances = NULL;
 	new->current_file_set = NULL;
+	new->name = TEXTDUMP_NULL;
+	new->run_path_variable = TEXTDUMP_NULL;
+	new->we_set_run_path_variable = FALSE;
+	new->task_slot_size = 1024;
 
 	/* Set up the text dump to store strings for the suite. */
 
@@ -215,15 +241,9 @@ osbool suite_create_instance(char *folder)
 
 	debug_printf("\\DCreating new suite 0x%x...", new);
 
-	/* Load the first file set from the folder. */
+	/* Start running the tests. */
 
-	new->file_sets = file_set_create_instance(new, new->file_sets, TRUE);
-
-	/* Update the window for the new set. */
-
-	new->current_file_set = new->file_sets;
-
-	file_set_add_to_window(new->current_file_set, new->window);
+	suite_start_test_run(new, TRUE);
 
 	return TRUE;
 }
@@ -286,6 +306,39 @@ void suite_delete_all(void)
 {
 	while (suite_list != NULL)
 		suite_delete_instance(suite_list);
+}
+
+/**
+ * Start a suite scan and test run.
+ *
+ * \param *instance	Pointer to the suite of interest.
+ * \param full		TRUE to perform a full run; FALSE to run only changed
+ *			files.
+ */
+
+static void suite_start_test_run(struct suite_block *instance, osbool full)
+{
+	if (suite_read_config_file(instance) == FALSE)
+		return;
+
+	if (suite_set_run_path_variable(instance) == FALSE)
+		return;
+
+	instance->file_sets = file_set_create_instance(instance, instance->file_sets, full);
+
+	/* Update the window for the new set. */
+
+	instance->current_file_set = instance->file_sets;
+	file_set_add_to_window(instance->current_file_set, instance->window);
+
+	/* Just in case all of the files generated errors... */
+
+	struct window_status_field *status = file_set_get_status(instance->current_file_set);
+	debug_printf("\\REnding status 0x%x", status);
+	if (status != NULL) {
+		window_update_status_field(instance->window, status);
+		suite_unset_run_path_variable(instance);
+	}
 }
 
 /**
@@ -394,7 +447,10 @@ osbool suite_read_folder_path(struct suite_block *instance, char *buffer, size_t
 	if (textdump_base == NULL)
 		return FALSE;
 
+	/* Set the folder to either a constant string, or a textdump offset. */
+
 	unsigned folder_offset = TEXTDUMP_NULL;
+	char *folder_name = NULL;
 
 	switch (folder) {
 	case SUITE_FOLDER_SOURCE:
@@ -403,13 +459,24 @@ osbool suite_read_folder_path(struct suite_block *instance, char *buffer, size_t
 	case SUITE_FOLDER_EXECUTABLE:
 		folder_offset = instance->executable_folder;
 		break;
+	case SUITE_FOLDER_CONFIG_FILE:
+		folder_name = "Unify";
+		break;
 	default:
 		return FALSE;
 	}
 
+	/* Turn textdump offsets into a string pointer and fail if necessary. */
+
+	if (folder_name == NULL && folder_offset != TEXTDUMP_NULL)
+		folder_name = textdump_base + folder_offset;
+
+	if (folder_name == NULL)
+		return FALSE;
+
 	string_printf(buffer, length, "%s.%s%s%s",
 			textdump_base + instance->suite_folder,
-			textdump_base + folder_offset,
+			folder_name,
 			(leafname == TEXTDUMP_NULL) ? "" : ".",
 			(leafname == TEXTDUMP_NULL) ? "" : textdump_base + leafname
 	);
@@ -442,8 +509,10 @@ void suite_update_window_fold(struct suite_block *instance, struct file_set_bloc
 	window_update_fold(instance->window, id, entries);
 
 	struct window_status_field *status = file_set_get_status(set);
-	if (status != NULL)
+	if (status != NULL) {
 		window_update_status_field(instance->window, status);
+		suite_unset_run_path_variable(instance);
+	}
 }
 
 /**
@@ -512,12 +581,8 @@ static void suite_run_handler(osbool full, void *data)
 	if (instance == NULL)
 		return;
 
-	instance->file_sets = file_set_create_instance(instance, instance->file_sets, full);
+	suite_start_test_run(instance, full);
 
-	/* Update the window for the new set. */
-
-	instance->current_file_set = instance->file_sets;
-	file_set_add_to_window(instance->current_file_set, instance->window);
 }
 
 /**
@@ -694,4 +759,150 @@ static osbool suite_object_info_handler(int fold, struct file_dialogue_data *inf
 	info->executable_timestamp = object_details.executable_timestamp;
 
 	return TRUE;
+}
+
+/**
+ * Look for a suite config file in the root folder, and parse it if found.
+ * This will update the settings within the suite.
+ *
+ * \param *instance	Pointer to the suite to update.
+ * \return		TRUE if successful; otherwise FALSE.
+ */
+
+static osbool suite_read_config_file(struct suite_block *instance)
+{
+	if (instance == NULL)
+		return FALSE;
+
+	char filename[256];
+	if (!suite_read_folder_path(instance, filename, sizeof(filename), SUITE_FOLDER_CONFIG_FILE, TEXTDUMP_NULL))
+		return FALSE;
+
+	char section[sf_MAX_CONFIG_FILE_BUFFER], token[sf_MAX_CONFIG_FILE_BUFFER], value[sf_MAX_CONFIG_FILE_BUFFER];
+
+	*section = '\0';
+	*token = '\0';
+	*value = '\0';
+
+	/* Open the file and read it. Note that not opening the file is a valid
+	 * thing, because there doesn't need to be a config file.
+	 */
+
+	osbool unexpected_tokens = FALSE;
+
+	debug_printf("Reading config file %s", filename);
+
+	FILE *fh = fopen(filename, "r");
+	if (fh == NULL)
+		return TRUE;
+
+	while (config_read_token_pair(fh, token, value, section) != sf_CONFIG_READ_EOF) {
+		if (string_nocase_strcmp(token, "SuiteName") == 0) {
+			char *textdump_base = suite_get_textdump_base(instance);
+
+			if (*value == '\0') {
+				instance->name = TEXTDUMP_NULL;
+			} else if (instance->name == TEXTDUMP_NULL ||
+					strcmp(textdump_base + instance->name, value) != 0) {
+				instance->name = suite_store_text(instance, value);
+			}
+		} else if (string_nocase_strcmp(token, "RunPathVar") == 0) {
+			char *textdump_base = suite_get_textdump_base(instance);
+
+			if (*value == '\0') {
+				instance->run_path_variable = TEXTDUMP_NULL;
+			} else if (instance->run_path_variable == TEXTDUMP_NULL ||
+					strcmp(textdump_base + instance->run_path_variable, value) != 0) {
+				instance->run_path_variable = suite_store_text(instance, value);
+			}
+		} else if (string_nocase_strcmp(token, "TaskMemory") == 0) {
+			errno = 0;
+			char *end = NULL;
+			long result = strtol(value, &end, 10);
+
+			if (errno == ERANGE) {
+				error_msgs_report_error("ConfigBadMem");
+				continue;
+			} else if (end == value) {
+				error_msgs_report_error("ConfigBadMem");
+				continue;
+			}
+
+			if (result > 0 && result <= INT_MAX)
+				instance->task_slot_size = result;
+			else
+				error_msgs_report_error("ConfigBadMem");
+		} else {
+			unexpected_tokens = TRUE;
+		}
+	}
+
+	fclose(fh);
+
+	if (unexpected_tokens)
+		error_msgs_report_error("ConfigTokens");
+
+	return TRUE;
+}
+
+/**
+ * Set the run path variable for the suite.
+ *
+ * \param *instance	Pointer to the suite to update.
+ * \return		TRUE if successful; else FALSE.
+ */
+
+static osbool suite_set_run_path_variable(struct suite_block *instance)
+{
+	if (instance == NULL)
+		return FALSE;
+
+	/* Make sure that we don't claim credit for this by mistake. */
+
+	instance->we_set_run_path_variable = FALSE;
+
+	if (instance->run_path_variable == TEXTDUMP_NULL)
+		return TRUE;
+
+	/* We have a variable to set, so check to see if it already exists. */
+
+	char *var_name = suite_get_textdump_base(instance) + instance->run_path_variable;
+
+	int var_len = 0;
+	os_read_var_val_size(var_name, 0, os_VARTYPE_STRING, &var_len, NULL);
+
+	if (var_len != 0)
+		return TRUE;
+
+	char folder[1024];
+	if (suite_read_folder_path(instance, folder, sizeof(folder), SUITE_FOLDER_EXECUTABLE, TEXTDUMP_NULL) == FALSE)
+		return FALSE;
+
+	debug_printf("Setting %s to %s", var_name, folder);
+
+	if (xos_set_var_val(var_name, (const byte *) folder, strlen(folder), 0, os_VARTYPE_STRING, NULL, NULL) != NULL)
+		return FALSE;
+
+	instance->we_set_run_path_variable = TRUE;
+
+	return TRUE;
+}
+
+/**
+ * Unset the run path variable for the suite.
+ *
+ * \param *instance	Pointer to the suite to update.
+ */
+
+static void suite_unset_run_path_variable(struct suite_block *instance)
+{
+	if (instance == NULL || instance->we_set_run_path_variable == FALSE)
+		return;
+
+	char *var_name = suite_get_textdump_base(instance) + instance->run_path_variable;
+	xos_set_var_val(var_name, NULL, -1, 0, os_VARTYPE_STRING, NULL, NULL);
+
+	debug_printf("Unset %s", var_name);
+
+	instance->we_set_run_path_variable = FALSE;
 }
