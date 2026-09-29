@@ -58,24 +58,13 @@
 #include "log.h"
 
 #include "flexutils.h"
+#include "log_font.h"
 
 /**
  * The log window menu entries
  */
 
 #define LOG_MENU_SAVE_LOG 0
-
-/* Structure definitions. */
-
-/**
- * A line redraw record.
- */
-
-struct log_redraw {
-	unsigned offset;	/**< Offset into the text area for the text.	*/
-	os_colour colour;	/**< The colour of the line.			*/
-	osbool bold;		/**< Should the text be bold?			*/
-};
 
 /**
  * A log instance.
@@ -95,7 +84,7 @@ struct log_instance {
 	/**
 	 * A flex block containing the log line redraw data.
 	 */
-	struct log_redraw *lines;
+	struct log_font_redraw *lines;
 
 	/**
 	 * The handle of the log window.
@@ -123,14 +112,9 @@ struct log_instance {
 	size_t allocation;
 
 	/**
-	 * The font size used in the window, in 16th of a point.
+	 * The log window display fonts.
 	 */
-	int font_size;
-
-	/**
-	 * The line spacing used in the window, as a percentage of font size.
-	 */
-	int linespace;
+	struct log_font_block *fonts;
 };
 
 /**
@@ -177,30 +161,6 @@ static struct saveas_block *log_saveas_dialogue = NULL;
 
 static wimp_menu *log_window_menu = NULL;
 
-/**
- * The font handle for normal text.
- */
-
-static font_f log_normal_font = font_SYSTEM;
-
-/**
- * The font handle for bold text.
- */
-
-static font_f log_bold_font = font_SYSTEM;
-
-/**
- * The block to use when calling Font_ScanString.
- */
-
-static font_scan_block log_scan_block = {
-	.space.x = 0,
-	.space.y = 0,
-	.letter.x = 0,
-	.letter.y = 0,
-	.split_char = -1
-};
-
 /* Static function prototypes. */
 
 static void log_close_handler(wimp_close *close);
@@ -209,13 +169,6 @@ static void log_menu_warning_handler(wimp_w w, wimp_menu *menu, wimp_message_men
 static void log_redraw_handler(wimp_draw *redraw);
 static void log_set_window_extent(struct log_instance *instance);
 static osbool log_save_file(char *filename, osbool selection, void *data);
-static os_error *log_find_fonts(struct log_instance *instance);
-static void log_lose_fonts(void);
-static int log_get_linespace(struct log_instance *instance);
-static os_error *log_get_line_width(struct log_redraw *line_info, char *text, int *width);
-static int log_get_base_width(void);
-static os_error *log_get_text_width(font_f font, char *text, int *width);
-static os_error *log_paint_text(struct log_redraw *line_info, char *text, os_coord *pos);
 
 /**
  * Initialise the log implementation.
@@ -261,8 +214,15 @@ struct log_instance *log_create_instance(char *title)
 	instance->length = 0;
 	instance->text = NULL;
 
-	instance->font_size = 192; // 12pt
-	instance->linespace = 130;
+	instance->fonts = NULL;
+
+	/* Set up the fonts. */
+
+	instance->fonts = log_font_create_instance(192, 130);
+	if (instance->fonts == NULL) {
+		log_delete_instance(instance);
+		return NULL;
+	}
 
 	/* Store the window title. */
 
@@ -302,6 +262,9 @@ void log_delete_instance(struct log_instance *instance)
 		event_delete_window(instance->handle);
 		wimp_delete_window(instance->handle);
 	}
+
+	if (instance->fonts != NULL)
+		log_font_delete_instance(instance->fonts);
 
 	/* Free the memory used. */
 
@@ -429,8 +392,8 @@ static void log_redraw_handler(wimp_draw *redraw)
 {
 	struct log_instance *instance = event_get_window_user_data(redraw->w);
 
-	log_find_fonts(instance);
-	int row_height = log_get_linespace(instance);
+	log_font_find_fonts(instance->fonts);
+	int row_height = log_font_get_linespace(instance->fonts);
 
 	/* Perform the redraw. */
 
@@ -455,14 +418,14 @@ static void log_redraw_handler(wimp_draw *redraw)
 
 			for (int y = top; y <= base; y++) {
 				pos.y = oy - ((y + 1) * row_height);
-				log_paint_text(instance->lines + y, instance->text, &pos);
+				log_font_paint_text(instance->lines + y, instance->text, &pos);
 			}
 		}
 
 		more = wimp_get_rectangle(redraw);
 	}
 
-	log_lose_fonts();
+	log_font_lose_fonts();
 }
 
 /**
@@ -547,7 +510,7 @@ void log_finish_text(struct log_instance *instance)
 
 	/* Allocate space for the redraw data and populate it. */
 
-	if (!flexutils_allocate((void **) &(instance->lines), sizeof(struct log_redraw), lines)) {
+	if (!flexutils_allocate((void **) &(instance->lines), sizeof(struct log_font_redraw), lines)) {
 		instance->lines = NULL;
 		return;
 	}
@@ -593,15 +556,15 @@ static void log_set_window_extent(struct log_instance *instance)
 	if (instance == NULL)
 		return;
 
-	log_find_fonts(instance);
+	log_font_find_fonts(instance->fonts);
 
 	/* Get the window width. */
 
-	int window_width = log_get_base_width();
+	int window_width = log_font_get_base_width(LOG_MINIMUM_COLUMNS);
 
 	for (int i = 0; i < instance->line_count; i++) {
 		int line_width = 0;
-		if (log_get_line_width(instance->lines + i, instance->text, &line_width))
+		if (log_font_get_line_width(instance->lines + i, instance->text, &line_width))
 			continue;
 
 		if (line_width > window_width)
@@ -612,10 +575,10 @@ static void log_set_window_extent(struct log_instance *instance)
 
 	/* Get the window height. */
 
-	int window_height = 3 * LOG_ROW_INSET + log_get_linespace(instance) *
+	int window_height = 3 * LOG_ROW_INSET + log_font_get_linespace(instance->fonts) *
 			((instance->line_count > 10) ? instance->line_count : LOG_MINIMUM_ROWS);
 
-	log_lose_fonts();
+	log_font_lose_fonts();
 
 	os_box extent = {
 		.x0 = 0,
@@ -673,176 +636,6 @@ osbool log_write_to_file(struct log_instance *instance, FILE *file)
 	}
 
 	return TRUE;
-}
-
-/**
- * Find the fonts required to plot into a window.
- *
- * \param *instance		Pointer to the log instance for which the fonts
- *				will be used.
- * \return			Pointer to an error block, or NULL if successful.
- */
-
-static os_error *log_find_fonts(struct log_instance *instance)
-{
-	if (instance == NULL)
-		return NULL;
-
-	os_error *error = NULL;
-
-	if (log_normal_font == font_SYSTEM && error == NULL) {
-		error = xfont_find_font("Corpus.Medium", instance->font_size, instance->font_size, 0, 0,
-				&log_normal_font, NULL, NULL);
-		if (error != NULL)
-			log_normal_font = font_SYSTEM;
-	}
-
-	if (log_bold_font == font_SYSTEM && error == NULL) {
-		error = xfont_find_font("Corpus.Bold", instance->font_size, instance->font_size, 0, 0,
-				&log_bold_font, NULL, NULL);
-		if (error != NULL)
-			log_bold_font = font_SYSTEM;
-	}
-
-	return error;
-}
-
-/**
- * Lose the fonts used to plot into a window.
- */
-
-static void log_lose_fonts(void)
-{
-	if (log_normal_font != 0)
-		font_lose_font(log_normal_font);
-
-	if (log_bold_font != 0)
-		font_lose_font(log_bold_font);
-
-	log_normal_font = font_SYSTEM;
-	log_bold_font = font_SYSTEM;
-}
-
-/**
- * Return the required line spacing for the current font.
- *
- * \param *instance		Pointer to the log instance for which the fonts
- *				will be used.
- * \return			The line spacing in OS units.
- */
-
-static int log_get_linespace(struct log_instance *instance)
-{
-	if (instance == NULL)
-		return 32; // A value that might work, at a push.
-
-	int linespace = 0;
-
-	font_convertto_os(1000 * (instance->font_size / 16) * instance->linespace / 100, 0, &linespace, NULL);
-
-	return linespace;
-}
-
-/**
- * Calculate the width of a line of text in the current font.
- *
- * \param *line_info		Pointer to the line details.
- * \param *text			Pointer to the base of the text area.
- * \param *width		Pointer to a variable to take the width of the
- *				line in OS Units.
- * \return			Pointer to an error block, or NULL if successful.
- */
-
-static os_error *log_get_line_width(struct log_redraw *line_info, char *text, int *width)
-{
-	if (width != NULL)
-		*width = 0;
-
-	font_f font = (line_info->bold == TRUE) ? log_bold_font : log_normal_font;
-
-	if (line_info == NULL || text == NULL || font == font_SYSTEM)
-		return NULL;
-
-	return log_get_text_width(font, text + line_info->offset, width);
-}
-
-/**
- * Calculate a base width for the log window, based on 80 columns of text.
- *
- * \return			The base width, in OS units.
- */
-
-static int log_get_base_width(void)
-{
-	char *text = "MMMMM";
-	int normal_width = 0, bold_width = 0;
-
-	if (log_get_text_width(log_normal_font, text, &normal_width))
-		normal_width = -1;
-
-	if (log_get_text_width(log_bold_font, text, &bold_width))
-		bold_width = -1;
-
-	if (normal_width == -1 && bold_width == -1)
-		return LOG_MINIMUM_COLUMNS * 16;
-
-	return (normal_width > bold_width) ?
-			normal_width * (LOG_MINIMUM_COLUMNS / strlen(text)) :
-			bold_width * (LOG_MINIMUM_COLUMNS / strlen(text));
-}
-
-/**
- * Calculate the width of a piece of text in a given font.
- *
- * \param font			The handle of the font to use.
- * \param *text			Pointer to the text to check.
- * \param *width		Pointer to a variable to take the width of the
- *				line in OS Units.
- * \return			Pointer to an error block, or NULL if successful.
- */
-
-static os_error *log_get_text_width(font_f font, char *text, int *width)
-{
-	if (width != NULL)
-		*width = 0;
-
-	if (text == NULL || font == font_SYSTEM)
-		return NULL;
-
-	os_error *error = xfont_scan_string(font, text, font_KERN | font_GIVEN_FONT | font_GIVEN_BLOCK | font_RETURN_BBOX,
-			0x7fffffff, 0x7fffffff, &log_scan_block, NULL, 0, NULL, NULL, NULL, NULL);
-	if (error != NULL)
-		return error;
-
-	return xfont_convertto_os(log_scan_block.bbox.x1 - log_scan_block.bbox.x0, 0, width, NULL);
-}
-
-/**
- * Paint a line into a window.
- *
- * \param *line_info		Pointer to the line details.
- * \param *text			Pointer to the base of the text area.
- * \param *pos			Pointer to a coordinate block.
- * \return			Pointer to an error block, or NULL if successful.
- */
-
-static os_error *log_paint_text(struct log_redraw *line_info, char *text, os_coord *pos)
-{
-	if (line_info == NULL)
-		return NULL;
-
-	font_f font = (line_info->bold == TRUE) ? log_bold_font : log_normal_font;
-
-	if (line_info == NULL || text == NULL || font == font_SYSTEM)
-		return NULL;
-
-	os_error *error = xcolourtrans_set_font_colours(font, os_COLOUR_VERY_LIGHT_GREY,
-			line_info->colour, 14, NULL, NULL, NULL);
-	if (error != NULL)
-		return error;
-
-	return xfont_paint(font, text + line_info->offset, font_OS_UNITS | font_KERN | font_GIVEN_FONT,
-			pos->x, pos->y, NULL, NULL, 0);
 }
 
 /**

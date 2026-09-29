@@ -31,6 +31,7 @@
 #define UNIFY_LOG
 
 #include <stdio.h>
+#include <oslib/types.h>
 
 /**
  * A non-log line

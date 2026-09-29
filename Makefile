@@ -38,6 +38,7 @@ OBJS =  date_time.o	\
 	flexutils.o	\
 	iconbar.o	\
 	log.o		\
+	log_font.o	\
 	main.o		\
 	project.o	\
 	runner.o	\
