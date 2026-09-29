@@ -40,18 +40,12 @@
 #include <oslib/font.h>
 #include <oslib/os.h>
 #include <oslib/osfile.h>
-#include <oslib/wimp.h>
 
 /* SF-Lib header files. */
 
 #include <sflib/debug.h>
 #include <sflib/errors.h>
-#include <sflib/event.h>
 #include <sflib/heap.h>
-#include <sflib/ihelp.h>
-#include <sflib/saveas.h>
-#include <sflib/templates.h>
-#include <sflib/windows.h>
 
 /* Application header files */
 
@@ -62,8 +56,6 @@
  */
 
 struct log_font_block {
-
-
 	/**
 	 * The font size used in the window, in 16th of a point.
 	 */

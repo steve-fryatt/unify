@@ -36,8 +36,6 @@
 
 /* OSLib header files */
 
-#include <oslib/colourtrans.h>
-#include <oslib/font.h>
 #include <oslib/os.h>
 #include <oslib/osfile.h>
 #include <oslib/wimp.h>
