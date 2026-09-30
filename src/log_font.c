@@ -65,6 +65,11 @@ struct log_font_block {
 	 * The line spacing used in the window, as a percentage of font size.
 	 */
 	int line_space;
+
+	/**
+	 * The minimum line height that we will provide (zero for none).
+	 */
+	int minimum_line_height;
 };
 
 /**
@@ -78,6 +83,18 @@ static font_f log_font_normal_font = font_SYSTEM;
  */
 
 static font_f log_font_bold_font = font_SYSTEM;
+
+/**
+ * TODO
+ */
+
+static int log_font_line_height = 0;
+
+/**
+ * TODO
+ */
+
+static int log_font_baseline_offset = 0;
 
 /**
  * The block to use when calling Font_ScanString.
@@ -96,6 +113,7 @@ static font_scan_block log_font_scan_block = {
 /**
  * Create a new log font instance.
  *
+ * \param mimimum_line_height	The minimum height of a line, in OS units.
  * \param font_size		The initial font size to use, in 16ths of a
  *				point.
  * \param line_space		The initial line space to use, as a percentage
@@ -103,14 +121,15 @@ static font_scan_block log_font_scan_block = {
  * \return			Pointer to the new instance, or NULL on failure.
  */
 
-struct log_font_block *log_font_create_instance(int font_size, int line_space)
+struct log_font_block *log_font_create_instance(int mimimum_line_height, int font_size, int line_space)
 {
 	struct log_font_block *new = heap_alloc(sizeof(struct log_font_block));
 	if (new == NULL)
 		return NULL;
 
-	new->font_size = font_size;
-	new->line_space = line_space;
+	new->minimum_line_height = mimimum_line_height;
+
+	log_font_set_metrics(new, font_size, line_space);
 
 	return new;
 }
@@ -130,6 +149,24 @@ void log_font_delete_instance(struct log_font_block *instance)
 }
 
 /**
+ * Set the metrics of a log font instance.
+ *
+ * \param *instance		Pointer to the instance to be updated.
+ * \param font_size		The new font size, in 16ths of a point.
+ * \param line_space		The new line space to use, as a percentage
+ *				of the font size.
+ */
+
+void log_font_set_metrics(struct log_font_block *instance, int font_size, int line_space)
+{
+	if (instance == NULL)
+		return;
+
+	instance->font_size = font_size;
+	instance->line_space = line_space;
+}
+
+/**
  * Find the fonts required to plot into a window.
  *
  * \param *instance		Pointer to the log instance for which the fonts
@@ -144,6 +181,8 @@ os_error *log_font_find_fonts(struct log_font_block *instance)
 
 	os_error *error = NULL;
 
+	/* The normal font. */
+
 	if (log_font_normal_font == font_SYSTEM && error == NULL) {
 		error = xfont_find_font("Corpus.Medium", instance->font_size, instance->font_size, 0, 0,
 				&log_font_normal_font, NULL, NULL);
@@ -151,12 +190,28 @@ os_error *log_font_find_fonts(struct log_font_block *instance)
 			log_font_normal_font = font_SYSTEM;
 	}
 
+	/* The bold font. */
+
 	if (log_font_bold_font == font_SYSTEM && error == NULL) {
 		error = xfont_find_font("Corpus.Bold", instance->font_size, instance->font_size, 0, 0,
 				&log_font_bold_font, NULL, NULL);
 		if (error != NULL)
 			log_font_bold_font = font_SYSTEM;
 	}
+
+	int line_height = 0;
+	font_convertto_os(1000 * instance->font_size * instance->line_space / 1600, 0,
+			&line_height, NULL);
+
+	log_font_line_height = (line_height > instance->minimum_line_height) ?
+			line_height : instance->minimum_line_height;
+
+	log_font_baseline_offset = 0;
+	font_convertto_os(1000 * instance->font_size * (instance->line_space - 100) / 1600, 0,
+			&log_font_baseline_offset, NULL);
+
+	if (log_font_line_height - line_height > 0)
+		log_font_baseline_offset += log_font_line_height - line_height;
 
 	return error;
 }
@@ -175,26 +230,21 @@ void log_font_lose_fonts(void)
 
 	log_font_normal_font = font_SYSTEM;
 	log_font_bold_font = font_SYSTEM;
+	log_font_line_height = 0;
+	log_font_baseline_offset = 0;
 }
 
 /**
- * Return the required line spacing for the current font.
+ * Return the required line height for the current font.
  *
- * \param *instance		Pointer to the log instance for which the fonts
- *				will be used.
+ * log_font_find_fonts() must have been called before use.
+ *
  * \return			The line spacing in OS units.
  */
 
-int log_font_get_linespace(struct log_font_block *instance)
+int log_font_get_line_height(void)
 {
-	if (instance == NULL)
-		return 32; // A value that might work, at a push.
-
-	int linespace = 0;
-
-	font_convertto_os(1000 * (instance->font_size / 16) * instance->line_space / 100, 0, &linespace, NULL);
-
-	return linespace;
+	return log_font_line_height;
 }
 
 /**
@@ -297,5 +347,5 @@ os_error *log_font_paint_text(struct log_font_redraw *line_info, char *text, os_
 		return error;
 
 	return xfont_paint(font, text + line_info->offset, font_OS_UNITS | font_KERN | font_GIVEN_FONT,
-			pos->x, pos->y, NULL, NULL, 0);
+			pos->x, pos->y + log_font_baseline_offset, NULL, NULL, 0);
 }

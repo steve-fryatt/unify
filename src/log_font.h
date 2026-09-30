@@ -55,6 +55,7 @@ struct log_font_block;
 /**
  * Create a new log font instance.
  *
+ * \param mimimum_line_height	The minimum height of a line, in OS units.
  * \param font_size		The initial font size to use, in 16ths of a
  *				point.
  * \param line_space		The initial line space to use, as a percentage
@@ -62,7 +63,7 @@ struct log_font_block;
  * \return			Pointer to the new instance, or NULL on failure.
  */
 
-struct log_font_block *log_font_create_instance(int font_size, int line_space);
+struct log_font_block *log_font_create_instance(int mimimum_line_height, int font_size, int line_space);
 
 /**
  * Delete a log font instance.
@@ -71,6 +72,17 @@ struct log_font_block *log_font_create_instance(int font_size, int line_space);
  */
 
 void log_font_delete_instance(struct log_font_block *instance);
+
+/**
+ * Set the metrics of a log font instance.
+ *
+ * \param *instance		Pointer to the instance to be updated.
+ * \param font_size		The new font size, in 16ths of a point.
+ * \param line_space		The new line space to use, as a percentage
+ *				of the font size.
+ */
+
+void log_font_set_metrics(struct log_font_block *instance, int font_size, int line_space);
 
 /**
  * Find the fonts required to plot into a window.
@@ -89,14 +101,14 @@ os_error *log_font_find_fonts(struct log_font_block *instance);
 void log_font_lose_fonts(void);
 
 /**
- * Return the required line spacing for the current font.
+ * Return the required line height for the current font.
  *
- * \param *instance		Pointer to the log instance for which the fonts
- *				will be used.
+ * log_font_find_fonts() must have been called before use.
+ *
  * \return			The line spacing in OS units.
  */
 
-int log_font_get_linespace(struct log_font_block *instance);
+int log_font_get_line_height(void);
 
 /**
  * Calculate the width of a line of text in the current font.

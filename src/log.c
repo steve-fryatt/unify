@@ -216,7 +216,7 @@ struct log_instance *log_create_instance(char *title)
 
 	/* Set up the fonts. */
 
-	instance->fonts = log_font_create_instance(192, 130);
+	instance->fonts = log_font_create_instance(0, 192, 130);
 	if (instance->fonts == NULL) {
 		log_delete_instance(instance);
 		return NULL;
@@ -391,7 +391,7 @@ static void log_redraw_handler(wimp_draw *redraw)
 	struct log_instance *instance = event_get_window_user_data(redraw->w);
 
 	log_font_find_fonts(instance->fonts);
-	int row_height = log_font_get_linespace(instance->fonts);
+	int row_height = log_font_get_line_height();
 
 	/* Perform the redraw. */
 
@@ -416,6 +416,12 @@ static void log_redraw_handler(wimp_draw *redraw)
 
 			for (int y = top; y <= base; y++) {
 				pos.y = oy - ((y + 1) * row_height);
+
+				wimp_set_colour(wimp_COLOUR_VERY_DARK_GREY);
+
+				os_plot(os_MOVE_TO, redraw->clip.x0, pos.y);
+				os_plot(os_PLOT_TO, redraw->clip.x1, pos.y);
+
 				log_font_paint_text(instance->lines + y, instance->text, &pos);
 			}
 		}
@@ -573,7 +579,7 @@ static void log_set_window_extent(struct log_instance *instance)
 
 	/* Get the window height. */
 
-	int window_height = 3 * LOG_ROW_INSET + log_font_get_linespace(instance->fonts) *
+	int window_height = 3 * LOG_ROW_INSET + log_font_get_line_height() *
 			((instance->line_count > 10) ? instance->line_count : LOG_MINIMUM_ROWS);
 
 	log_font_lose_fonts();
