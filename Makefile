@@ -45,6 +45,7 @@ OBJS =  date_time.o	\
 	string_match.o	\
 	suite.o		\
 	test_instance.o	\
+	test_log.o	\
 	textdump.o	\
 	window.o
 
