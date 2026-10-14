@@ -149,6 +149,11 @@ struct window_definition {
 	void (*callback_open_log_viewer)(int fold, void *data);
 
 	/**
+	 * Callback to request that an object viewer is opened.
+	 */
+	void (*callback_open_object_viewer)(int fold, int entry, void *data);
+
+	/**
 	 * Callback to request that a specific log is saved.
 	 */
 	osbool (*callback_save_log)(int fold, char* filename, void *data);

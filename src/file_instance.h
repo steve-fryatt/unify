@@ -245,6 +245,16 @@ osbool file_instance_has_log(struct file_instance_block *instance);
 osbool file_instance_open_log(struct file_instance_block *instance);
 
 /**
+ * Open the test information for a file instance.
+ *
+ * \param *instance	Pointer to the instance of intest.
+ * \param entry		The entry of interest.
+ * \return		TRUE if the log was opened; else FALSE.
+ */
+
+osbool file_instance_open_test(struct file_instance_block *instance, int entry);
+
+/**
  * Write the log file for an instance to a file handle.
  *
  * \param *instance	Pointer to the instance of interest.

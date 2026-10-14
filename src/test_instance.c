@@ -110,6 +110,7 @@ void test_instance_populate_new_test(struct test_instance_block *instance, unsig
 	instance->name = name;
 	instance->location = TEST_INSTANCE_LOCATION_NONE;
 	instance->status = TEST_INSTANCE_STATUS_UNKNOWN;
+	instance->log = NULL;
 }
 
 /**

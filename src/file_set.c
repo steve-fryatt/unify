@@ -516,6 +516,27 @@ osbool file_set_open_object_log(struct file_set_block *instance, int line)
 }
 
 /**
+ * Open a test detail window for an entry in a file set instance.
+ *
+ * \param *instance		Pointer to the file set instance of interest.
+ * \param line			The line number from which to open the test
+ *				information
+ * \param entry			The test entry within the file set.
+ * \return			TRUE if a log was opened; else FALSE.
+ */
+
+osbool file_set_open_object_test(struct file_set_block *instance, int line, int entry)
+{
+	if (instance == NULL || instance->objects == NULL)
+		return FALSE;
+
+	if (line < 0 || line >= instance->object_count)
+		return FALSE;
+
+	return file_instance_open_test(instance->objects[line], entry);
+}
+
+/**
  * Save a specific object log file to disc.
  *
  * \param *instance		Pointer to the file set instance of interest.

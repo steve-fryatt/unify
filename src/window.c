@@ -193,6 +193,8 @@
 #define WINDOW_MENU_FILE_VIEW_LOG 1
 #define WINDOW_MENU_FILE_SAVE_LOG 2
 
+#define WINDOW_MENU_TEST_VIEW_INFO 0
+
 /* Structure definitions. */
 
 /**
@@ -581,6 +583,10 @@ static void window_click_handler(wimp_pointer *pointer)
 	case WINDOW_TEMPLATE_ICON_EXPAND:
 		window_toggle_fold_icon(instance, fold);
 		break;
+	case WINDOW_TEMPLATE_ICON_NAME:
+		if (instance->definition->callback_open_object_viewer != NULL && fold != -1)
+			instance->definition->callback_open_object_viewer(fold, entry, instance->client_data);
+		break;
 	}
 }
 
@@ -724,12 +730,27 @@ static void window_menu_selection_handler(wimp_w w, wimp_menu *menu, wimp_select
 	switch(selection->items[0]) {
 	case WINDOW_MENU_FILE:
 		switch (selection->items[1]) {
+		case WINDOW_MENU_FILE_INFO:
+			if (instance->definition->callback_open_object_viewer != NULL &&
+					window_menu_fold != -1)
+				instance->definition->callback_open_object_viewer(window_menu_fold, -1,
+						instance->client_data);
+			break;
 		case WINDOW_MENU_FILE_VIEW_LOG:
 			if (instance->definition->callback_open_log_viewer != NULL && window_menu_fold != -1)
 				instance->definition->callback_open_log_viewer(window_menu_fold, instance->client_data);
 			break;
 		}
 		break;
+	case WINDOW_MENU_TEST:
+		switch (selection->items[1]) {
+		case WINDOW_MENU_TEST_VIEW_INFO:
+			if (instance->definition->callback_open_object_viewer != NULL &&
+					window_menu_fold != -1 && window_menu_entry != -1)
+				instance->definition->callback_open_object_viewer(window_menu_fold,
+						window_menu_entry, instance->client_data);
+			break;
+		}
 	}
 }
 

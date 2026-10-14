@@ -365,6 +365,11 @@ struct file_instance_block *file_instance_delete_instance(struct file_instance_b
 	if (instance->log != NULL)
 		log_delete_instance(instance->log);
 
+	for (int i = 0; i < instance->test_count; i++) {
+		if (instance->tests[i].log != NULL)
+			test_log_delete_instance(instance->tests[i].log);
+	}
+
 	flexutils_free((void **) &(instance->tests));
 
 	heap_free(instance);
@@ -620,6 +625,29 @@ osbool file_instance_open_log(struct file_instance_block *instance)
 		return FALSE;
 
 	log_open_window(instance->log);
+
+	return TRUE;
+}
+
+/**
+ * Open the test information for a file instance.
+ *
+ * \param *instance	Pointer to the instance of intest.
+ * \param entry		The entry of interest.
+ * \return		TRUE if the log was opened; else FALSE.
+ */
+
+osbool file_instance_open_test(struct file_instance_block *instance, int entry)
+{
+	if (instance == NULL || instance->tests == NULL)
+		return FALSE;
+
+	if (entry < 0 || entry >= instance->test_count)
+		return FALSE;
+
+	debug_printf("Requesting that we open a test instance...");
+
+//	log_open_window(instance->log);
 
 	return TRUE;
 }

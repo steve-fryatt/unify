@@ -63,7 +63,7 @@ menu(ListWindowFileMenu, "File") {
 }
 
 menu(ListWindowTestMenu, "Test") {
-	item("Info");
+	item("Info...");
 }
 
 /* The Log Window Menu */

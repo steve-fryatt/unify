@@ -154,6 +154,7 @@ static void suite_run_handler(osbool full, void *data);
 static osbool suite_redraw_line_handler(int fold, int entry, struct window_line *content, void *data);
 static void suite_object_has_log(int fold, void *data, osbool *this_log, osbool *any_log);
 static void suite_object_open_log(int fold, void *data);
+static void suite_object_open_test(int fold, int entry, void *data);
 static osbool suite_object_save_log(int fold, char *filename, void *data);
 static osbool suite_object_save_all_logs(char *filename, void *data);
 static osbool suite_object_info_handler(int fold, struct file_dialogue_data *info, void *data);
@@ -170,6 +171,7 @@ static struct window_definition suite_window_definition = {
 	.callback_fileinfo = suite_object_info_handler,
 	.callback_file_has_log = suite_object_has_log,
 	.callback_open_log_viewer = suite_object_open_log,
+	.callback_open_object_viewer = suite_object_open_test,
 	.callback_save_log = suite_object_save_log,
 	.callback_save_all_logs = suite_object_save_all_logs,
 	.callback_navigate = suite_navigation_handler,
@@ -694,6 +696,24 @@ static void suite_object_open_log(int fold, void *data)
 		return;
 
 	file_set_open_object_log(instance->current_file_set, fold);
+}
+
+/**
+ * Handle test open request events from an instance window.
+ *
+ * \param fold		The index of the fold containing the line.
+ * \param entry		The entry within the fold containing the line.
+ * \param *data		Pointer to our client data, which should be a
+ *			pointer to an instance.
+ */
+
+static void suite_object_open_test(int fold, int entry, void *data)
+{
+	struct suite_block *instance = data;
+	if (instance == NULL)
+		return;
+
+	file_set_open_object_test(instance->current_file_set, fold, entry);
 }
 
 /**
