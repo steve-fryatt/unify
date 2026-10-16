@@ -58,6 +58,7 @@
 #include "file_set.h"
 #include "flexutils.h"
 #include "log.h"
+#include "log_window.h" // TODO -- Remove
 #include "project.h"
 #include "runner.h"
 #include "suite.h"
@@ -646,6 +647,8 @@ osbool file_instance_open_test(struct file_instance_block *instance, int entry)
 		return FALSE;
 
 	debug_printf("Requesting that we open a test instance...");
+
+	log_window_create_instance(NULL, "Test Log Demo", NULL);
 
 //	log_open_window(instance->log);
 

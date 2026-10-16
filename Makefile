@@ -39,6 +39,7 @@ OBJS =  date_time.o	\
 	iconbar.o	\
 	log.o		\
 	log_font.o	\
+	log_window.o	\
 	main.o		\
 	project.o	\
 	runner.o	\

@@ -62,6 +62,7 @@
 #include "file_dialogue.h"
 #include "iconbar.h"
 #include "log.h"
+#include "log_window.h"
 #include "runner.h"
 #include "suite.h"
 #include "window.h"
@@ -241,6 +242,7 @@ static void main_initialise(void)
 	url_initialise();
 	runner_initialise(main_task_handle);
 	window_initialise(sprites);
+	log_window_initialise(sprites);
 	log_initialise();
 	file_dialogue_initialise();
 	iconbar_initialise();
