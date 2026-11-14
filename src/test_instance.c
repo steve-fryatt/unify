@@ -51,6 +51,7 @@
 
 #include "file_instance.h"
 #include "suite.h"
+#include "test_info.h"
 #include "textdump.h"
 
 /* Structure definitions. */
@@ -111,6 +112,7 @@ void test_instance_populate_new_test(struct test_instance_block *instance, unsig
 	instance->location = TEST_INSTANCE_LOCATION_NONE;
 	instance->status = TEST_INSTANCE_STATUS_UNKNOWN;
 	instance->log = NULL;
+	instance->info = NULL;
 }
 
 /**

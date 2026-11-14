@@ -255,6 +255,15 @@ osbool file_instance_open_log(struct file_instance_block *instance);
 osbool file_instance_open_test(struct file_instance_block *instance, int entry);
 
 /**
+ * Close a file or test information window from a file instance.
+ *
+ * \param *instance	Pointer to the instance owning the test.
+ * \param entry		The entry of to be closed, or -1 for the file.
+ */
+
+void file_instance_close_test(struct file_instance_block *instance, int entry);
+
+/**
  * Write the log file for an instance to a file handle.
  *
  * \param *instance	Pointer to the instance of interest.

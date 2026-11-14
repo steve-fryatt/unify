@@ -49,7 +49,7 @@ menu(ListWindowMenu, "Unify") {
 }
 
 menu(ListWindowFileMenu, "File") {
-	item("Info") {
+	item("Info...") {
 		d_box(FileInfo) {
 			warning;
 		}

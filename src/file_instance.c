@@ -55,6 +55,7 @@
 #include "file_instance.h"
 
 #include "date_time.h"
+#include "file_info.h"
 #include "file_set.h"
 #include "flexutils.h"
 #include "log.h"
@@ -62,6 +63,7 @@
 #include "project.h"
 #include "runner.h"
 #include "suite.h"
+#include "test_info.h"
 #include "test_instance.h"
 #include "textdump.h"
 #include "window.h"
@@ -158,6 +160,12 @@ struct file_instance_block {
 	 * The log data associated with the file.
 	 */
 	struct log_instance *log;
+
+	/**
+	 * Any file information window instance associated with the file.
+	 */
+
+	struct file_info_block *info;
 
 	/**
 	 * The pass, fail or error status of the file instance.
@@ -258,6 +266,7 @@ struct file_instance_block *file_instance_create_instance(struct suite_block *pa
 	new->test_space = FILE_INSTANCE_ALLOCATION_UNIT;
 	new->test_count = 0;
 	new->log = NULL;
+	new->info = NULL;
 
 	new->summary_passes = 0;
 	new->summary_fails = 0;
@@ -321,6 +330,7 @@ static struct file_instance_block *file_instance_clone_instance(struct file_set_
 	new->test_space = FILE_INSTANCE_ALLOCATION_UNIT;
 	new->test_count = 0;
 	new->log = NULL;
+	new->info = NULL;
 
 	new->name = template->name;
 
@@ -363,13 +373,19 @@ struct file_instance_block *file_instance_delete_instance(struct file_instance_b
 
 	/* Free the memory associated with the instance. */
 
-	if (instance->log != NULL)
-		log_delete_instance(instance->log);
-
 	for (int i = 0; i < instance->test_count; i++) {
+		if (instance->tests[i].info != NULL)
+			test_info_delete_instance(instance->tests[i].info);
+
 		if (instance->tests[i].log != NULL)
 			test_log_delete_instance(instance->tests[i].log);
 	}
+
+	if (instance->info != NULL)
+		file_info_delete_instance(instance->info);
+
+	if (instance->log != NULL)
+		log_delete_instance(instance->log);
 
 	flexutils_free((void **) &(instance->tests));
 
@@ -634,7 +650,7 @@ osbool file_instance_open_log(struct file_instance_block *instance)
  * Open the test information for a file instance.
  *
  * \param *instance	Pointer to the instance of intest.
- * \param entry		The entry of interest.
+ * \param entry		The entry of interest, or -1 for the file.
  * \return		TRUE if the log was opened; else FALSE.
  */
 
@@ -643,16 +659,54 @@ osbool file_instance_open_test(struct file_instance_block *instance, int entry)
 	if (instance == NULL || instance->tests == NULL)
 		return FALSE;
 
-	if (entry < 0 || entry >= instance->test_count)
-		return FALSE;
+	/* Open one of the information windows as appropriate. */
 
-	debug_printf("Requesting that we open a test instance...");
+	if (entry == -1) {
+		if (instance->info != NULL) {
+			file_info_bring_to_front(instance->info);
+		} else {
+			instance->info = file_info_create_instance();
+		}
 
-	log_window_create_instance(NULL, "Test Log Demo", NULL);
+		return TRUE;
+	} else if (entry >= 0 && entry < instance->test_count) {
+		if (instance->tests[entry].info != NULL) {
+			test_info_bring_to_front(instance->tests[entry].info);
+		} else {
+			instance->tests[entry].info = test_info_create_instance();
+		}
 
-//	log_open_window(instance->log);
+		return TRUE;
+	}
 
-	return TRUE;
+	/* We didn't find a valid window to open! */
+
+	return FALSE;
+}
+
+/**
+ * Close a file or test information window from a file instance.
+ *
+ * \param *instance	Pointer to the instance owning the test.
+ * \param entry		The entry of to be closed, or -1 for the file.
+ */
+
+void file_instance_close_test(struct file_instance_block *instance, int entry)
+{
+	if (instance == NULL)
+		return;
+
+	if (entry == -1) {
+		if (instance->info != NULL)
+			file_info_delete_instance(instance->info);
+
+		instance->info = NULL;
+	} else if (instance->tests != NULL && entry >= 0 && entry < instance->test_count) {
+		if (instance->tests[entry].info != NULL)
+			test_info_delete_instance(instance->tests[entry].info);
+
+		instance->tests[entry].info = NULL;
+	}
 }
 
 /**

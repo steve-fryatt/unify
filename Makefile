@@ -33,6 +33,7 @@ APP := !Unify
 
 OBJS =  date_time.o	\
 	file_dialogue.o	\
+	file_info.o	\
 	file_instance.o	\
 	file_set.o	\
 	flexutils.o	\
@@ -45,6 +46,7 @@ OBJS =  date_time.o	\
 	runner.o	\
 	string_match.o	\
 	suite.o		\
+	test_info.o	\
 	test_instance.o	\
 	test_log.o	\
 	textdump.o	\

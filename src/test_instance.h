@@ -30,6 +30,7 @@
 #ifndef UNIFY_TEST_INSTANCE
 #define UNIFY_TEST_INSTANCE
 
+#include "test_info.h"
 #include "test_log.h"
 
 enum test_instance_location {
@@ -53,6 +54,7 @@ struct test_instance_block {
 	enum test_instance_location location;
 	enum test_instance_status status;
 	struct test_log_instance *log;
+	struct test_info_block *info;
 };
 
 #include "file_instance.h"
