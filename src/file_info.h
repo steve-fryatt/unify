@@ -38,8 +38,6 @@
 
 /* SF-Lib header files. */
 
-/* Application header files */
-
 /* Definitions. */
 
 /**
@@ -50,15 +48,20 @@ struct file_info_block;
 
 /* Global variables. */
 
+/* Application header files */
+
+#include "file_instance.h"
+
 /* Function prototypes. */
 
 /**
  * Construct a new file information instance.
  *
+ * \param *parent	Pointer to the parent file instance.
  * \return		Pointer to the new instance, or NULL on failure.
  */
 
-struct file_info_block *file_info_create_instance(void);
+struct file_info_block *file_info_create_instance(struct file_instance_block *parent);
 
 /**
  * Delete a file information instance, closing the window and freeing up any

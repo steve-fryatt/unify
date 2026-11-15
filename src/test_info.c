@@ -44,6 +44,8 @@
 
 #include "test_info.h"
 
+#include "log_window.h"
+
 /* Definitions. */
 
 /**
@@ -51,7 +53,20 @@
  */
 
 struct test_info_block {
-	int none;
+	/**
+	 * Pointer to the parent file instance.
+	 */
+	struct file_instance_block *parent;
+
+	/**
+	 * The parent entry within the parent file instance.
+	 */
+	int parent_entry;
+
+	/**
+	 * Pointer to the associated log window instance.
+	 */
+	struct log_window_block *window;
 };
 
 /* Global variables. */
@@ -61,16 +76,24 @@ struct test_info_block {
 /**
  * Construct a new test information instance.
  *
+ * \param *parent	Pointer to the parent file instance.
+ * \param parent_entry	The entry from within the parent file instance.
  * \return		Pointer to the new instance, or NULL on failure.
  */
 
-struct test_info_block *test_info_create_instance(void)
+struct test_info_block *test_info_create_instance(struct file_instance_block *parent, int parent_entry)
 {
 	struct test_info_block *new = heap_alloc(sizeof(struct test_info_block));
 	if (new == NULL)
 		return NULL;
 
-	new->none = 0;
+	new->parent = parent;
+	new->parent_entry = parent_entry;
+	new->window = log_window_create_instance(NULL, "Test Info", parent, parent_entry, new);
+	if (new->window == NULL) {
+		test_info_delete_instance(new);
+		return NULL;
+	}
 
 	debug_printf("\\PCreated test info instance 0x%x", new);
 
@@ -91,6 +114,9 @@ void test_info_delete_instance(struct test_info_block *instance)
 
 	debug_printf("\\pDeleting test info instance 0x%x", instance);
 
+	if (instance->window != NULL)
+		log_window_delete_instance(instance->window);
+
 	heap_free(instance);
 }
 
@@ -102,12 +128,10 @@ void test_info_delete_instance(struct test_info_block *instance)
 
 void test_info_bring_to_front(struct test_info_block *instance)
 {
-	if (instance == NULL)
+	if (instance == NULL || instance->window == NULL)
 		return;
 
-	debug_printf("\\vBringing test info instance 0x%x to the front", instance);
-}
+	debug_printf("\\pBringing test info instance 0x%x to front", instance);
 
-/* Call file_instance_close_test() to handle window closure. If we pass parent
- * instance and entry to the window object, it could handle this for us.
- */
+	log_window_bring_to_front(instance->window);
+}

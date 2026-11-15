@@ -42,6 +42,8 @@
 
 /* Application header files */
 
+#include "file_instance.h"
+
 /* Definitions. */
 
 /**
@@ -80,11 +82,19 @@ void log_window_initialise(osspriteop_area *sprites);
  *
  * \param *definition	Pointer to the client window definition.
  * \param *title	Pointer to the title to use for the window.
+ * \param *parent	Pointer to the parent file instance whose data we're displaying.
+ * \param parent_entry	The entry that we're displating from the parent file instance.
  * \param *data		Pointer to the client data.
  * \return		Pointer to the new instance, or NULL on failure.
  */
 
-struct log_window_block *log_window_create_instance(struct log_window_definition *definition, char *title, void *data);
+struct log_window_block *log_window_create_instance(
+		struct log_window_definition *definition,
+		char *title,
+		struct file_instance_block *parent,
+		int parent_entry,
+		void *data
+);
 
 /**
  * Delete a Log Window instance.
@@ -93,5 +103,13 @@ struct log_window_block *log_window_create_instance(struct log_window_definition
  */
 
 void log_window_delete_instance(struct log_window_block *instance);
+
+/**
+ * Reopen a log window at the top of the stack.
+ *
+ * \param *instance	Pointer to the instance to be reopened.
+ */
+
+void log_window_bring_to_front(struct log_window_block *instance);
 
 #endif

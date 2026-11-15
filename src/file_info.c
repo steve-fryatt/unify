@@ -44,6 +44,9 @@
 
 #include "file_info.h"
 
+#include "file_instance.h"
+#include "log_window.h"
+
 /* Definitions. */
 
 /**
@@ -51,7 +54,15 @@
  */
 
 struct file_info_block {
-	int	none;
+	/**
+	 * Pointer to the parent file instance.
+	 */
+	struct file_instance_block *parent;
+
+	/**
+	 * Pointer to the associated log window instance.
+	 */
+	struct log_window_block *window;
 };
 
 /* Global variables. */
@@ -62,16 +73,22 @@ struct file_info_block {
 /**
  * Construct a new file information instance.
  *
+ * \param *parent	Pointer to the parent file instance.
  * \return		Pointer to the new instance, or NULL on failure.
  */
 
-struct file_info_block *file_info_create_instance(void)
+struct file_info_block *file_info_create_instance(struct file_instance_block *parent)
 {
 	struct file_info_block *new = heap_alloc(sizeof(struct file_info_block));
 	if (new == NULL)
 		return NULL;
 
-	new->none = 0;
+	new->parent = parent;
+	new->window = log_window_create_instance(NULL, "File Info", parent, -1, new);
+	if (new->window == NULL) {
+		file_info_delete_instance(new);
+		return NULL;
+	}
 
 	debug_printf("\\VCreated test info instance 0x%x", new);
 
@@ -92,6 +109,9 @@ void file_info_delete_instance(struct file_info_block *instance)
 
 	debug_printf("\\vDeleting file info instance 0x%x", instance);
 
+	if (instance->window != NULL)
+		log_window_delete_instance(instance->window);
+
 	heap_free(instance);
 }
 
@@ -103,12 +123,10 @@ void file_info_delete_instance(struct file_info_block *instance)
 
 void file_info_bring_to_front(struct file_info_block *instance)
 {
-	if (instance == NULL)
+	if (instance == NULL || instance->window == NULL)
 		return;
 
-	debug_printf("\\vBringing file info instance 0x%x to the front", instance);
-}
+	debug_printf("\\vBringing file info instance 0x%x to front", instance);
 
-/* Call file_instance_close_test() to handle window closure. If we pass parent
- * instance and entry to the window object, it could handle this for us.
- */
+	log_window_bring_to_front(instance->window);
+}

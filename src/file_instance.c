@@ -33,7 +33,6 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <string.h>
 
 /* Acorn C header files */
 
@@ -41,7 +40,6 @@
 
 #include <oslib/os.h>
 #include <oslib/osgbpb.h>
-#include <oslib/wimp.h>
 
 /* SF-Lib header files. */
 
@@ -59,7 +57,6 @@
 #include "file_set.h"
 #include "flexutils.h"
 #include "log.h"
-#include "log_window.h" // TODO -- Remove
 #include "project.h"
 #include "runner.h"
 #include "suite.h"
@@ -665,7 +662,7 @@ osbool file_instance_open_test(struct file_instance_block *instance, int entry)
 		if (instance->info != NULL) {
 			file_info_bring_to_front(instance->info);
 		} else {
-			instance->info = file_info_create_instance();
+			instance->info = file_info_create_instance(instance);
 		}
 
 		return TRUE;
@@ -673,7 +670,9 @@ osbool file_instance_open_test(struct file_instance_block *instance, int entry)
 		if (instance->tests[entry].info != NULL) {
 			test_info_bring_to_front(instance->tests[entry].info);
 		} else {
-			instance->tests[entry].info = test_info_create_instance();
+			/* The instance->tests flex block may shift, so don't write back in one move! */
+			struct test_info_block *test_info = test_info_create_instance(instance, entry);
+			instance->tests[entry].info = test_info;
 		}
 
 		return TRUE;

@@ -38,8 +38,6 @@
 
 /* SF-Lib header files. */
 
-/* Application header files */
-
 /* Definitions. */
 
 /**
@@ -50,15 +48,21 @@ struct test_info_block;
 
 /* Global variables. */
 
+/* Application header files */
+
+#include "file_instance.h"
+
 /* Function prototypes. */
 
 /**
  * Construct a new test inforomation instance.
  *
+ * \param *parent	Pointer to the parent file instance.
+ * \param parent_entry	The entry from within the parent file instance.
  * \return		Pointer to the new instance, or NULL on failure.
  */
 
-struct test_info_block *test_info_create_instance(void);
+struct test_info_block *test_info_create_instance(struct file_instance_block *parent, int parent_entry);
 
 /**
  * Delete a test information instance, closing the window and freeing up any

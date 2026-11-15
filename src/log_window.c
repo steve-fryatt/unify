@@ -53,6 +53,8 @@
 
 #include "log_window.h"
 
+#include "file_instance.h"
+
 /* Definitions. */
 
 /**
@@ -64,6 +66,16 @@ struct log_window_block {
 	 * The window definition.
 	 */
 	struct log_window_definition *definition;
+
+	/**
+	 * The parent file instance whose data we're displaying.
+	 */
+	struct file_instance_block *parent;
+
+	/**
+	 * The entry that we're displating from the parent file instance.
+	 */
+	int parent_entry;
 
 	/**
 	 * The client data pointer/
@@ -111,11 +123,19 @@ void log_window_initialise(osspriteop_area *sprites)
  *
  * \param *definition	Pointer to the client window definition.
  * \param *title	Pointer to the title to use for the window.
+ * \param *parent	Pointer to the parent file instance whose data we're displaying.
+ * \param parent_entry	The entry that we're displating from the parent file instance.
  * \param *data		Pointer to the client data.
  * \return		Pointer to the new instance, or NULL on failure.
  */
 
-struct log_window_block *log_window_create_instance(struct log_window_definition *definition, char *title, void *data)
+struct log_window_block *log_window_create_instance(
+		struct log_window_definition *definition,
+		char *title,
+		struct file_instance_block *parent,
+		int parent_entry,
+		void *data
+)
 {
 	if (/*definition == NULL || */title == NULL)
 		return NULL;
@@ -131,6 +151,8 @@ struct log_window_block *log_window_create_instance(struct log_window_definition
 	/* Initialise the data. */
 
 	new->definition = definition;
+	new->parent = parent;
+	new->parent_entry = parent_entry;
 	new->client_data = data;
 	new->window_handle = NULL;
 
@@ -195,7 +217,7 @@ void log_window_delete_instance(struct log_window_block *instance)
 /**
  * Handle Close events on a Log Window instance window.
  *
- * \param *close		The Wimp Close data block.
+ * \param *close	The Wimp Close data block.
  */
 
 static void log_window_close_handler(wimp_close *close)
@@ -210,7 +232,23 @@ static void log_window_close_handler(wimp_close *close)
 	if (instance->definition != NULL && instance->definition->callback_close != NULL)
 		instance->definition->callback_close(instance->client_data);
 
-	/* Delete ourselves. */
+	/* Request that the parent deletes us. */
 
-	log_window_delete_instance(instance);
+	file_instance_close_test(instance->parent, instance->parent_entry);
+
+	/* We do not delete ourselves at this point! */
+}
+
+/**
+ * Reopen a log window at the top of the stack.
+ *
+ * \param *instance	Pointer to the instance to be reopened.
+ */
+
+void log_window_bring_to_front(struct log_window_block *instance)
+{
+	if (instance == NULL || instance->window_handle == NULL)
+		return;
+
+	windows_open(instance->window_handle);
 }
